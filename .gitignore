@@ -3,5 +3,5 @@
 /.nrepl-port
 /*.iml
 /.idea/
-/samples
-/ODM-1.3.1
+/samples/
+/ODM-*/

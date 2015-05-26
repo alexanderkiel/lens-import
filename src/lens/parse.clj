@@ -10,7 +10,8 @@
 (defn parse-form-def [ch form-def]
   (publish! ch :form
             {:id (xml1-> form-def (attr :OID))
-             :name (xml1-> form-def (attr :Name))}))
+             :name (xml1-> form-def (attr :Name))
+             :study-id (xml1-> (-> form-def zip/up zip/up) (attr :OID))}))
 
 (defn parse-meta-data-version [ch meta-data-version]
   (doseq [form-def (xml-> meta-data-version :FormDef)]

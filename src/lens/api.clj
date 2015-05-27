@@ -2,6 +2,7 @@
   (:use plumbing.core)
   (:require [clojure.java.io :as io]
             [cognitect.transit :as transit]
+            [schema.core :as s]
             [org.httpkit.client :as http])
   (:import [java.net URI]
            [java.io ByteArrayOutputStream]))
@@ -58,9 +59,11 @@
       (println "Created study" id)
       (println "Failed creating study" id " status" (:status resp)))))
 
-(defnk update-study!
-  [uri etag id name :as req]
-  (assert uri)
+(defnk ^:always-validate update-study!
+  "Updates a study.
+
+  URI and ETag are from a GET request before."
+  [uri etag :- s/Str id name :as req]
   (let [resp
         @(http/request
            {:method :put
@@ -84,3 +87,42 @@
         (update-study! (assoc req :uri (-> resp :body :links :self :href)
                                   :etag (-> resp :headers :etag))))
       (create-study! req))))
+
+;; ---- Form -----------------------------------------------------------------
+
+(defnk create-form! [id name study-id :as req]
+  (let [resp
+        @(post-form "http://localhost:5001/forms"
+                    (select-keys req [:id :name :study-id :description]))]
+    (if (= 201 (:status resp))
+      (println "Created form" id)
+      (println "Failed creating form" id "status" (:status resp)))))
+
+(defnk ^:always-validate update-form!
+  "Updates a form.
+
+  URI and ETag are from a GET request before."
+  [uri etag :- s/Str id name :as req]
+  (let [resp
+        @(http/request
+           {:method :put
+            :url uri
+            :headers {"If-Match" etag
+                      "Accept" "application/transit+json"
+                      "Content-Type" "application/transit+json"}
+            :body (write-transit (select-keys req [:id :name :description]))})]
+    (if (= 204 (:status resp))
+      (println "Updated form" id)
+      (println "Failed updating form" id " status" (:status resp)))))
+
+(defn- form-props [m]
+  (select-keys m [:id :name :description]))
+
+(defnk create-or-update-form! [id :as req]
+  (let [uri "http://localhost:5001/find-form"
+        resp (execute-query uri {:id id})]
+    (if (= 200 (:status resp))
+      (when (not= (form-props req) (form-props (:body resp)))
+        (update-form! (assoc req :uri (-> resp :body :links :self :href)
+                                 :etag (-> resp :headers :etag))))
+      (create-form! req))))

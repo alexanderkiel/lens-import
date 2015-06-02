@@ -11,7 +11,7 @@
    :study-id (xml1-> (-> form-def zip/up zip/up) (attr :OID))})
 
 (defn parse-form-def! [bus form-def]
-  (publish! bus :form-def (parse-form-def-head form-def)))
+  (publish! bus :odm-form-def (parse-form-def-head form-def)))
 
 (defn parse-meta-data-version! [bus meta-data-version]
   (doseq [form-def (xml-> meta-data-version :FormDef)]
@@ -23,7 +23,7 @@
    :description (xml1-> study :GlobalVariables :StudyDescription text)})
 
 (defn parse-study! [bus study]
-  (publish! bus :study (parse-study-head study))
+  (publish! bus :odm-study (parse-study-head study))
   (doseq [meta-data-version (xml-> study :MetaDataVersion)]
     (parse-meta-data-version! bus meta-data-version)))
 

@@ -1,5 +1,6 @@
 (ns lens.event-bus
   (:require [clojure.core.async :as async :refer [go-loop <!]]
+            [clojure.tools.logging :as log]
             [com.stuartsierra.component :as component]))
 
 (defrecord Bus []
@@ -17,6 +18,7 @@
 
 (defn publish! [bus topic msg]
   {:pre [(:publisher bus)]}
+  (log/debug "Publish on" topic "<-" (pr-str msg))
   (async/>!! (:publisher bus) {:topic topic :msg msg}))
 
 (defn listen-on

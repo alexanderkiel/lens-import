@@ -4,14 +4,15 @@
             [lens.api :as api]
             [lens.event-bus :as bus]))
 
+(defn odm-study-handler [bus]
+  (fnk [id :as odm-study]
+    (when-let [study (api/create-or-update-study! odm-study)]
+      (bus/publish! bus :study study))))
+
 (defrecord StudyImporter [bus]
   component/Lifecycle
   (start [this]
-    (->> (bus/listen-on bus :study
-           (fnk [id :as study]
-             (let [uri (api/create-or-update-study! study)]
-               (println "got study" id "at" uri)
-               (bus/publish! bus :study-uri {:id id :uri uri}))))
+    (->> (bus/listen-on bus :odm-study (odm-study-handler bus))
          (assoc this :stop-fn)))
   (stop [this]
     ((:stop-fn this))

@@ -1,6 +1,7 @@
 (ns lens.api
   (:use plumbing.core)
   (:require [clojure.java.io :as io]
+            [clojure.tools.logging :as log]
             [cognitect.transit :as transit]
             [schema.core :as s]
             [org.httpkit.client :as http])
@@ -32,40 +33,65 @@
   [base-uri doc]
   (clojure.walk/postwalk #(resolve-uri-in-form base-uri %) doc))
 
+(defn- parse-response [request-uri resp]
+  (if (= "application/transit+json" (-> resp :headers :content-type))
+    (update-in resp [:body] #(->> (read-transit %) (resolve-uris request-uri)))
+    resp))
+
+(defn fetch
+  "Fetches the uri with.
+
+  Bodies of transit responses are parsed already and have resolved URIs."
+  [uri]
+  (log/debug "Fetch" uri)
+  (let [resp @(http/request {:method :get
+                             :url uri
+                             :headers {"Accept" "application/transit+json"}
+                             :as :stream})]
+    (parse-response uri resp)))
+
 (defn execute-query
   "Executes a query on uri with params.
 
-  Bodies of 200 (OK) responses are parsed already and have resolved URIs."
+  Bodies of transit responses are parsed already and have resolved URIs."
   [uri params]
+  {:pre [uri (map? params)]}
   (let [resp @(http/request {:method :get
                              :url uri
                              :headers {"Accept" "application/transit+json"}
                              :query-params params :as :stream})]
-    (if (= 200 (:status resp))
-      (update-in resp [:body] #(->> (read-transit %) (resolve-uris uri)))
-      resp)))
+    (parse-response uri resp)))
 
 (defn post-form [url params]
   (http/request {:method :post :url url :form-params params}))
 
+(defn extract-body-if-ok [resp]
+  (condp = (:status resp)
+    200
+    (:body resp)
+    (log/error "Got non-ok response with status:" (:status resp))))
+
 ;; ---- Study -----------------------------------------------------------------
+
+(defn- study-props [m]
+  (select-keys m [:id :name :description]))
 
 (defnk create-study!
   "Creates a study with :id, :name and optional :description."
-  [id name :as req]
-  (let [resp @(post-form "http://localhost:5001/studies"
-                         (select-keys req [:id :name :description]))]
-    (if (= 201 (:status resp))
-      (do
-        (println "Created study" id)
-        (get-in resp [:header "Location"]))
-      (println "Failed creating study" id " status" (:status resp)))))
+  [id :as req]
+  (let [uri "http://localhost:5001/studies"
+        resp @(post-form uri (study-props req))]
+    (condp = (:status resp)
+      201
+      (log/spyf "Created study at %s" (->> resp :headers :location
+                                           (resolve-uri uri)))
+      (log/error "Failed creating study" id "status:" (:status resp)))))
 
-(defnk ^:always-validate update-study!
+(defnk update-study!
   "Updates a study.
 
   URI and ETag are from a GET request before."
-  [uri etag :- s/Str id name :as req]
+  [uri etag :- s/Str id :as req]
   (let [resp
         @(http/request
            {:method :put
@@ -74,40 +100,46 @@
                       "Accept" "application/transit+json"
                       "Content-Type" "application/transit+json"}
             :body (write-transit (select-keys req [:id :name :description]))})]
-    (if (= 204 (:status resp))
-      (println "Updated study" id)
-      (println "Failed updating study" id " status" (:status resp)))))
-
-(defn- study-props [m]
-  (select-keys m [:id :name :description]))
+    (condp = (:status resp)
+      204
+      (log/debug "Updated study" id)
+      (log/error "Failed to update study" id "status:" (:status resp)))))
 
 (defnk create-or-update-study! [id :as req]
   (let [uri "http://localhost:5001/find-study"
         resp (execute-query uri {:id id})]
     (condp = (:status resp)
       200
-      (let [uri (-> resp :body :links :self :href)]
-        (when (not= (study-props req) (study-props (:body resp)))
-          (update-study! (assoc req :uri uri :etag (-> resp :headers :etag))))
-        uri)
+      (let [study (:body resp)]
+        (when (not= (study-props req) (study-props study))
+          (update-study! (assoc req :uri (-> study :links :self :href)
+                                    :etag (-> resp :headers :etag))))
+        study)
       404
-      (create-study! req))))
+      (some-> (create-study! req)
+              (fetch)
+              (extract-body-if-ok))
+      (log/error "Failed to find study" id "status:" (:status resp)))))
 
-;; ---- Form -----------------------------------------------------------------
+;; ---- Form Def --------------------------------------------------------------
 
-(defnk create-form-def! [id name study-id :as req]
-  (let [resp
-        @(post-form "http://localhost:5001/forms"
-                    (select-keys req [:id :name :study-id :description]))]
-    (if (= 201 (:status resp))
-      (println "Created form" id)
-      (println "Failed creating form" id "status" (:status resp)))))
+(defn- form-def-props [m]
+  (select-keys m [:id :name :description]))
 
-(defnk ^:always-validate update-form-def!
-  "Updates a form.
+(defnk create-form-def! [study id :as req]
+  (let [uri (-> study :forms :lens/create-form-def :action)
+        resp @(post-form uri (form-def-props req))]
+    (condp = (:status resp)
+      201
+      (log/spyf "Created form def at %s" (->> resp :headers :location
+                                              (resolve-uri uri)))
+      (log/error "Failed to create form def" id "status:" (:status resp)))))
+
+(defnk update-form-def!
+  "Updates a form def.
 
   URI and ETag are from a GET request before."
-  [uri etag :- s/Str id name :as req]
+  [uri etag :- s/Str id :as req]
   (let [resp
         @(http/request
            {:method :put
@@ -116,21 +148,21 @@
                       "Accept" "application/transit+json"
                       "Content-Type" "application/transit+json"}
             :body (write-transit (select-keys req [:id :name :description]))})]
-    (if (= 204 (:status resp))
-      (println "Updated form" id)
-      (println "Failed updating form" id " status" (:status resp)))))
+    (condp = (:status resp)
+      204
+      (log/debug "Updated form def" id)
+      (log/error "Failed to update form def" id "status:" (:status resp)))))
 
-(defn- form-props [m]
-  (select-keys m [:id :name :description]))
-
-(defnk create-or-update-form-def! [study-uri id :as req]
-  (println "create or update form def at" study-uri)
-  (let [uri (str study-uri "/find-form-def")
+(defnk create-or-update-form-def! [study id :as req]
+  (let [uri (-> study :forms :lens/find-form-def :action)
         resp (execute-query uri {:id id})]
     (condp = (:status resp)
       200
-      (when (not= (form-props req) (form-props (:body resp)))
+      (when (not= (form-def-props req) (form-def-props (:body resp)))
         (update-form-def! (assoc req :uri (-> resp :body :links :self :href)
-                                 :etag (-> resp :headers :etag))))
+                                     :etag (-> resp :headers :etag))))
       404
-      (create-form-def! req))))
+      (some-> (create-form-def! req)
+              (fetch)
+              (extract-body-if-ok))
+      (log/error "Failed to find form def" id "status:" (:status resp)))))

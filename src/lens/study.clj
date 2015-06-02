@@ -1,13 +1,15 @@
 (ns lens.study
   (:use plumbing.core)
-  (:require [com.stuartsierra.component :as component]
+  (:require [clojure.tools.logging :as log]
+            [com.stuartsierra.component :as component]
             [lens.api :as api]
             [lens.event-bus :as bus]))
 
 (defn odm-study-handler [bus]
   (fnk [id :as odm-study]
-    (when-let [study (api/create-or-update-study! odm-study)]
-      (bus/publish! bus :study study))))
+    (if-let [study (api/upsert-study! odm-study)]
+      (bus/publish! bus :study study)
+      (log/error "Error while upserting study" id))))
 
 (defrecord StudyImporter [bus]
   component/Lifecycle

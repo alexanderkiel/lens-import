@@ -69,3 +69,22 @@
         (recur ((topic-callback-map topic) result msg))))
     #(doseq [[topic] topic-callback-map]
       (async/unsub (:publication bus) topic ch))))
+
+(defn wait-for
+  ""
+  [bus res-topic topic callback]
+  {:pre [(:publication bus)]}
+  (let [ch (async/chan)
+        res-ch (async/chan)]
+    (async/sub (:publication bus) topic ch)
+    (async/sub (:publication bus) res-topic res-ch)
+    (go-loop [res nil
+              ports [res-ch]]
+      (let [[{:keys [msg]} port] (async/alts! ports)]
+        (when msg
+          (condp = port
+            ch (do (callback res msg) (recur res [ch]))
+            res-ch (recur msg [ch])))))
+    #(do
+      (async/unsub (:publication bus) topic ch)
+      (async/unsub (:publication bus) res-topic res-ch))))

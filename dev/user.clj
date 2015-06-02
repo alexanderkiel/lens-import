@@ -4,9 +4,9 @@
             [clojure.pprint :refer [pprint]]
             [clojure.tools.namespace.repl :refer [refresh]]
             [com.stuartsierra.component :as component]
-            [lens.api :as api]
             [lens.study :refer [study-importer]]
-            [lens.form-def :refer [form-def-study-uri-coordinator form-def-importer]]
+            [lens.form-def :refer [form-def-importer]]
+            [lens.item-group-def :refer [item-group-def-importer]]
             [lens.event-bus :as bus :refer [publish!]]
             [lens.parse :refer [parse!]]))
 
@@ -14,12 +14,12 @@
   (-> (component/system-map
         :bus (bus/bus)
         :study-importer (study-importer)
-        :form-def-study-uri-coordinator (form-def-study-uri-coordinator)
-        :form-def-importer (form-def-importer))
+        :form-def-importer (form-def-importer)
+        :item-group-def-importer (item-group-def-importer))
       (component/system-using
         {:study-importer [:bus]
-         :form-def-study-uri-coordinator [:bus]
-         :form-def-importer [:bus]})))
+         :form-def-importer [:bus]
+         :item-group-def-importer [:bus]})))
 
 (defn start []
   (alter-var-root #'system component/start))

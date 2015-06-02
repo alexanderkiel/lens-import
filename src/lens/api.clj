@@ -71,6 +71,15 @@
     (:body resp)
     (log/error "Got non-ok response with status:" (:status resp))))
 
+(defn update-resource [uri etag body]
+  (http/request
+    {:method :put
+     :url uri
+     :headers {"If-Match" etag
+               "Accept" "application/transit+json"
+               "Content-Type" "application/transit+json"}
+     :body (write-transit body)}))
+
 ;; ---- Study -----------------------------------------------------------------
 
 (defn- study-props [m]
@@ -92,20 +101,13 @@
 
   URI and ETag are from a GET request before."
   [uri etag :- s/Str id :as req]
-  (let [resp
-        @(http/request
-           {:method :put
-            :url uri
-            :headers {"If-Match" etag
-                      "Accept" "application/transit+json"
-                      "Content-Type" "application/transit+json"}
-            :body (write-transit (select-keys req [:id :name :description]))})]
+  (let [resp @(update-resource uri etag (study-props req))]
     (condp = (:status resp)
       204
       (log/debug "Updated study" id)
       (log/error "Failed to update study" id "status:" (:status resp)))))
 
-(defnk create-or-update-study! [id :as req]
+(defnk upsert-study! [id :as req]
   (let [uri "http://localhost:5001/find-study"
         resp (execute-query uri {:id id})]
     (condp = (:status resp)
@@ -121,48 +123,93 @@
               (extract-body-if-ok))
       (log/error "Failed to find study" id "status:" (:status resp)))))
 
-;; ---- Form Def --------------------------------------------------------------
+;; ---- form-def --------------------------------------------------------------
 
 (defn- form-def-props [m]
   (select-keys m [:id :name :description]))
 
-(defnk create-form-def! [study id :as req]
-  (let [uri (-> study :forms :lens/create-form-def :action)
-        resp @(post-form uri (form-def-props req))]
-    (condp = (:status resp)
-      201
-      (log/spyf "Created form def at %s" (->> resp :headers :location
-                                              (resolve-uri uri)))
-      (log/error "Failed to create form def" id "status:" (:status resp)))))
+(defn create-form-def! [study {:keys [id] :as req}]
+  (if-let [uri (-> study :forms :lens/create-form-def :action)]
+    (let [resp @(post-form uri (form-def-props req))]
+      (condp = (:status resp)
+        201
+        (log/spyf "Created form-def at %s" (->> resp :headers :location
+                                                (resolve-uri uri)))
+        (log/error "Failed to create form-def" id "status:" (:status resp))))
+    (log/error "Missing :lens/create-form-def form in study.")))
 
 (defnk update-form-def!
-  "Updates a form def.
+  "Updates a form-def.
 
   URI and ETag are from a GET request before."
   [uri etag :- s/Str id :as req]
-  (let [resp
-        @(http/request
-           {:method :put
-            :url uri
-            :headers {"If-Match" etag
-                      "Accept" "application/transit+json"
-                      "Content-Type" "application/transit+json"}
-            :body (write-transit (select-keys req [:id :name :description]))})]
+  (let [resp @(update-resource uri etag (form-def-props req))]
     (condp = (:status resp)
       204
-      (log/debug "Updated form def" id)
-      (log/error "Failed to update form def" id "status:" (:status resp)))))
+      (log/debug "Updated form-def" id)
+      (log/error "Failed to update form-def" id "status:" (:status resp)))))
 
-(defnk create-or-update-form-def! [study id :as req]
-  (let [uri (-> study :forms :lens/find-form-def :action)
-        resp (execute-query uri {:id id})]
+(defn upsert-form-def! [study {:keys [id] :as req}]
+  (if-let [uri (-> study :forms :lens/find-form-def :action)]
+    (let [resp (execute-query uri {:id id})]
+      (condp = (:status resp)
+        200
+        (let [form-def (:body resp)]
+          (when (not= (form-def-props req) (form-def-props form-def))
+            (update-form-def! (assoc req :uri (-> form-def :links :self :href)
+                                         :etag (-> resp :headers :etag))))
+          form-def)
+        404
+        (some-> (create-form-def! study req)
+                (fetch)
+                (extract-body-if-ok))
+        (log/error "Failed to find form-def" id "status:" (:status resp))))
+    (log/error "Missing :lens/find-form-def form in study.")))
+
+;; ---- item-group-def --------------------------------------------------------
+
+(defn- item-group-def-props [m]
+  (select-keys m [:id :name :description]))
+
+(defn create-item-group-def! [study {:keys [id] :as req}]
+  (if-let [uri (-> study :forms :lens/create-item-group-def :action)]
+    (let [resp @(post-form uri (item-group-def-props req))]
+      (condp = (:status resp)
+        201
+        (log/spyf "Created item-group-def at %s" (->> resp :headers :location
+                                                      (resolve-uri uri)))
+        (log/error "Failed to create item-group-def" id "status:"
+                   (:status resp))))
+    (log/error "Missing :lens/create-item-group-def form in study.")))
+
+(defnk update-item-group-def!
+  "Updates an item-group-def.
+
+  URI and ETag are from a GET request before."
+  [uri etag :- s/Str id :as req]
+  (let [resp @(update-resource uri etag (item-group-def-props req))]
     (condp = (:status resp)
-      200
-      (when (not= (form-def-props req) (form-def-props (:body resp)))
-        (update-form-def! (assoc req :uri (-> resp :body :links :self :href)
-                                     :etag (-> resp :headers :etag))))
-      404
-      (some-> (create-form-def! req)
-              (fetch)
-              (extract-body-if-ok))
-      (log/error "Failed to find form def" id "status:" (:status resp)))))
+      204
+      (log/debug "Updated item-group-def" id)
+      (log/error "Failed to update item-group-def" id "status:"
+                 (:status resp)))))
+
+(defn upsert-item-group-def! [study {:keys [id] :as req}]
+  (if-let [uri (-> study :forms :lens/find-item-group-def :action)]
+    (let [resp (execute-query uri {:id id})]
+      (condp = (:status resp)
+        200
+        (let [item-group-def (:body resp)]
+          (when (not= (item-group-def-props req)
+                      (item-group-def-props item-group-def))
+            (update-item-group-def!
+              (assoc req :uri (-> item-group-def :links :self :href)
+                         :etag (-> resp :headers :etag))))
+          item-group-def)
+        404
+        (some-> (create-item-group-def! study req)
+                (fetch)
+                (extract-body-if-ok))
+        (log/error "Failed to find item-group def" id "status:"
+                   (:status resp))))
+    (log/error "Missing :lens/find-item-group-def form in study.")))

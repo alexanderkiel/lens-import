@@ -16,11 +16,16 @@
   (->Bus))
 
 (defn publish! [bus topic msg]
+  {:pre [(:publisher bus)]}
   (async/>!! (:publisher bus) {:topic topic :msg msg}))
 
 (defn listen-on
-  "Listens on a topic of the bus. Calls the callback with the message."
+  "Listens on a topic of the bus.
+
+  Calls the callback with each message. Returns a function which when called
+  unsubscribes from the topic."
   [bus topic callback]
+  {:pre [(:publication bus)]}
   (let [ch (async/chan)]
     (async/sub (:publication bus) topic ch)
     (go-loop []
@@ -34,6 +39,8 @@
 
   Callbacks are reduce functions over one single immediate result starting with
   start. Callbacks are supplied in a map from topic to callback.
+
+  Returns a function which when called unsubscribes from all topics.
 
   Example:
 
@@ -51,9 +58,12 @@
        0)}
     0)"
   [bus topic-callback-map start]
+  {:pre [(:publication bus)]}
   (let [ch (async/chan)]
     (doseq [[topic] topic-callback-map]
       (async/sub (:publication bus) topic ch))
     (go-loop [result start]
-             (when-let [{:keys [topic msg]} (<! ch)]
-               (recur ((topic-callback-map topic) result msg))))))
+      (when-let [{:keys [topic msg]} (<! ch)]
+        (recur ((topic-callback-map topic) result msg))))
+    #(doseq [[topic] topic-callback-map]
+      (async/unsub (:publication bus) topic ch))))

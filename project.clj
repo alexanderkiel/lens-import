@@ -14,6 +14,7 @@
                  [prismatic/plumbing "0.4.3"]
                  [http-kit "2.1.18"]
                  [com.cognitect/transit-clj "0.8.271"]
+                 [com.stuartsierra/component "0.2.3"]
                  [clj-time "0.6.0"]
                  [clj-stacktrace "0.2.7"]
                  [org.slf4j/slf4j-api "1.7.7"]

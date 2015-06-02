@@ -56,7 +56,9 @@
   (let [resp @(post-form "http://localhost:5001/studies"
                          (select-keys req [:id :name :description]))]
     (if (= 201 (:status resp))
-      (println "Created study" id)
+      (do
+        (println "Created study" id)
+        (get-in resp [:header "Location"]))
       (println "Failed creating study" id " status" (:status resp)))))
 
 (defnk ^:always-validate update-study!
@@ -82,15 +84,18 @@
 (defnk create-or-update-study! [id :as req]
   (let [uri "http://localhost:5001/find-study"
         resp (execute-query uri {:id id})]
-    (if (= 200 (:status resp))
-      (when (not= (study-props req) (study-props (:body resp)))
-        (update-study! (assoc req :uri (-> resp :body :links :self :href)
-                                  :etag (-> resp :headers :etag))))
+    (condp = (:status resp)
+      200
+      (let [uri (-> resp :body :links :self :href)]
+        (when (not= (study-props req) (study-props (:body resp)))
+          (update-study! (assoc req :uri uri :etag (-> resp :headers :etag))))
+        uri)
+      404
       (create-study! req))))
 
 ;; ---- Form -----------------------------------------------------------------
 
-(defnk create-form! [id name study-id :as req]
+(defnk create-form-def! [id name study-id :as req]
   (let [resp
         @(post-form "http://localhost:5001/forms"
                     (select-keys req [:id :name :study-id :description]))]
@@ -98,7 +103,7 @@
       (println "Created form" id)
       (println "Failed creating form" id "status" (:status resp)))))
 
-(defnk ^:always-validate update-form!
+(defnk ^:always-validate update-form-def!
   "Updates a form.
 
   URI and ETag are from a GET request before."
@@ -118,11 +123,14 @@
 (defn- form-props [m]
   (select-keys m [:id :name :description]))
 
-(defnk create-or-update-form! [id :as req]
-  (let [uri "http://localhost:5001/find-form"
+(defnk create-or-update-form-def! [study-uri id :as req]
+  (println "create or update form def at" study-uri)
+  (let [uri (str study-uri "/find-form-def")
         resp (execute-query uri {:id id})]
-    (if (= 200 (:status resp))
+    (condp = (:status resp)
+      200
       (when (not= (form-props req) (form-props (:body resp)))
-        (update-form! (assoc req :uri (-> resp :body :links :self :href)
+        (update-form-def! (assoc req :uri (-> resp :body :links :self :href)
                                  :etag (-> resp :headers :etag))))
-      (create-form! req))))
+      404
+      (create-form-def! req))))

@@ -1,7 +1,6 @@
 (ns user
   (:use plumbing.core)
-  (:require [clojure.core.async :as async :refer [<! >! <!! >!!]]
-            [clojure.java.io :as io]
+  (:require [clojure.java.io :as io]
             [clojure.pprint :refer [pprint]]
             [clojure.tools.namespace.repl :refer [refresh]]
             [com.stuartsierra.component :as component]
@@ -44,7 +43,6 @@
   (->> "samples/9814_who_five_well-being_.ODM.xml"
        #_"samples/9840_nci_standard_adverse.ODM.xml"
        (io/input-stream)
-       (parse! (:bus system))
-       (<!!))
+       (parse! (:bus system)))
 
   )

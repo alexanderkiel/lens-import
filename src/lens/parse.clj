@@ -1,6 +1,5 @@
 (ns lens.parse
-  (:require [clojure.core.async :as async]
-            [clojure.data.xml :as xml]
+  (:require [clojure.data.xml :as xml]
             [clojure.data.zip.xml :refer [xml-> xml1-> attr text]]
             [clojure.zip :as zip]
             [lens.event-bus :refer [publish!]]))
@@ -27,9 +26,17 @@
   (doseq [meta-data-version (xml-> study :MetaDataVersion)]
     (parse-meta-data-version! bus meta-data-version)))
 
-(defn parse! [bus input]
-  (async/thread
-    (with-open [input input]
-      (let [root (zip/xml-zip (xml/parse input))]
-        (doseq [study (xml-> root :Study)]
-          (parse-study! bus study))))))
+(defn parse!
+  "Parses an ODM XML file at input and publishes various events on bus.
+
+  The events are:
+    :odm-study    - a study with :id, :name and :description
+    :odm-form-def - a form def with :id, :name, optional :description and
+                    :study-id
+
+  Returns nil after all events could be published."
+  [bus input]
+  (with-open [input input]
+    (let [root (zip/xml-zip (xml/parse input))]
+      (doseq [study (xml-> root :Study)]
+        (parse-study! bus study)))))

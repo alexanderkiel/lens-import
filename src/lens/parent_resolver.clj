@@ -3,13 +3,13 @@
   (:use plumbing.core)
   (:require [clojure.tools.logging :as log]
             [com.stuartsierra.component :as component]
-            [lens.api :as api]
             [lens.event-bus :as bus]))
 
-(defrecord ParentResolver [bus res-topic topic callback]
+(defrecord ParentResolver [warehouse-bus parse-bus res-topic topic callback]
   component/Lifecycle
   (start [this]
-    (->> (bus/wait-for bus res-topic topic (callback bus))
+    (->> (callback warehouse-bus)
+         (bus/wait-for warehouse-bus parse-bus res-topic topic)
          (assoc this :stop-fn)))
   (stop [this]
     ((:stop-fn this))

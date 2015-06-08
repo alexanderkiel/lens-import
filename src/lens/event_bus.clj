@@ -3,7 +3,7 @@
             [clojure.tools.logging :as log]
             [com.stuartsierra.component :as component]))
 
-(defrecord Bus []
+(defrecord Bus [name]
   component/Lifecycle
   (start [this]
     (let [publisher (async/chan)]
@@ -13,12 +13,14 @@
     (async/close! (:publisher this))
     (dissoc this :publisher :publication)))
 
-(defn bus []
-  (->Bus))
+(defn bus
+  "Creates a new event bus."
+  [name]
+  (->Bus name))
 
 (defn publish! [bus topic msg]
   {:pre [(:publisher bus)]}
-  (log/debug "Publish on" topic "<-" (pr-str msg))
+  (log/debug "Publish on" (str (:name bus) "/" (name topic)) "<-" (pr-str msg))
   (async/>!! (:publisher bus) {:topic topic :msg msg}))
 
 (defn listen-on
@@ -72,12 +74,12 @@
 
 (defn wait-for
   ""
-  [bus res-topic topic callback]
+  [res-bus bus res-topic topic callback]
   {:pre [(:publication bus)]}
   (let [ch (async/chan)
         res-ch (async/chan)]
     (async/sub (:publication bus) topic ch)
-    (async/sub (:publication bus) res-topic res-ch)
+    (async/sub (:publication res-bus) res-topic res-ch)
     (go-loop [res nil
               ports [res-ch]]
       (let [[{:keys [msg]} port] (async/alts! ports)]
@@ -87,4 +89,4 @@
             res-ch (recur msg [ch])))))
     #(do
       (async/unsub (:publication bus) topic ch)
-      (async/unsub (:publication bus) res-topic res-ch))))
+      (async/unsub (:publication res-bus) res-topic res-ch))))

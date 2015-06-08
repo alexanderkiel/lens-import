@@ -16,6 +16,11 @@
     (transit/write (transit/writer out :json) o)
     (io/input-stream (.toByteArray out))))
 
+(defn- transit-write-str [o]
+  (let [out (ByteArrayOutputStream.)]
+    (transit/write (transit/writer out :json) o)
+    (String. (.toByteArray out))))
+
 (defn- resolve-uri [^URI base-uri uri]
   (.resolve base-uri (str uri)))
 
@@ -44,7 +49,7 @@
 
   Bodies of transit responses are parsed already and have resolved URIs."
   [uri]
-  (log/debug "Fetch" uri)
+  (log/debug "Fetch" (str uri))
   (let [resp @(http/request {:method :get
                              :url (str uri)
                              :headers {"Accept" "application/transit+json"}
@@ -60,11 +65,16 @@
   (let [resp @(http/request {:method :get
                              :url (str uri)
                              :headers {"Accept" "application/transit+json"}
-                             :query-params params :as :stream})]
+                             :query-params (map-vals transit-write-str params)
+                             :as :stream})]
     (parse-response uri resp)))
 
-(defn post-form [uri params]
-  (http/request {:method :post :url (str uri) :form-params params}))
+(defn post [uri params]
+  @(http/request {:method :post
+                  :url (str uri)
+                  :headers {"Accept" "application/transit+json"
+                            "Content-Type" "application/transit+json"}
+                  :body (write-transit params)}))
 
 (defn extract-body-if-ok [resp]
   (condp = (:status resp)
@@ -81,135 +91,88 @@
                "Content-Type" "application/transit+json"}
      :body (write-transit body)}))
 
-;; ---- Study -----------------------------------------------------------------
+(defn- etag [resp]
+  (-> resp :headers :etag))
 
-(defn- study-props [m]
-  (select-keys m [:id :name :description]))
+(defn- location [base-uri resp]
+  (->> resp :headers :location (resolve-uri base-uri)))
 
-(defnk create-study!
-  "Creates a study with :id, :name and optional :description."
-  [id :as req]
-  (let [uri "http://localhost:5001/studies"
-        resp @(post-form uri (study-props req))]
+(defn- self [doc]
+  (-> doc :links :self :href))
+
+(defn- action-href [doc id]
+  (or (-> doc :actions id :href)
+      (log/error "Can't find action" id "in" (keys (:actions doc)))))
+
+(defn create! [create-uri m]
+  (let [resp (post create-uri m)]
     (condp = (:status resp)
       201
-      (log/spyf "Created study at %s" (->> resp :headers :location
-                                           (resolve-uri uri)))
-      (log/error "Failed creating study" id "status:" (:status resp)))))
+      (log/spyf "Created %s" (location create-uri resp))
+      (log/error "Failed to create" (:id m) "status:" (:status resp)
+                 "body:" (:body resp)))))
 
-(defnk update-study!
-  "Updates a study.
+(defn update-resp!
+  [resp m]
+  (let [original (:body resp) edited (merge original m)]
+    (when (not= original edited)
+      (let [uri (self original) resp @(update-resource uri (etag resp) edited)]
+        (condp = (:status resp)
+          204
+          (log/debug "Updated" (str uri))
+          (log/error "Failed to update" (str uri) "status:" (:status resp)))))
+    edited))
 
-  URI and ETag are from a GET request before."
-  [uri etag :- s/Str id :as req]
-  (let [resp @(update-resource uri etag (study-props req))]
-    (condp = (:status resp)
-      204
-      (log/debug "Updated study" id)
-      (log/error "Failed to update study" id "status:" (:status resp)))))
-
-(defn upsert-study! [find-study-uri {:keys [id] :as req}]
-  (let [resp (execute-query find-study-uri {:id id})]
+(defn update!
+  "Updates the resource at uri with stuff in m."
+  [uri m]
+  (let [resp (fetch uri)]
     (condp = (:status resp)
       200
-      (let [study (:body resp)]
-        (when (not= (study-props req) (study-props study))
-          (update-study! (assoc req :uri (-> study :links :self :href)
-                                    :etag (-> resp :headers :etag))))
-        study)
+      (update-resp! resp m)
       404
-      (some-> (create-study! req)
+      (log/error "Failed to update" (str uri) "status:" (:status resp)))))
+
+(defn upsert! [find-uri create-uri {:keys [id] :as m}]
+  {:pre [find-uri]}
+  (let [resp (execute-query find-uri {:id id})]
+    (condp = (:status resp)
+      200
+      (update-resp! resp m)
+      404
+      (some-> (create! create-uri m)
               (fetch)
               (extract-body-if-ok))
-      (log/error "Failed to find study" id "status:" (:status resp)))))
+      (log/error "Failed to find" id "status:" (:status resp)))))
 
-;; ---- form-def --------------------------------------------------------------
+;; ---- Study -----------------------------------------------------------------
 
-(defn- form-def-props [m]
-  (select-keys m [:id :name :description]))
+(defn upsert-study! [service-document m]
+  {:pre [service-document]}
+  (upsert! (action-href service-document :lens/find-study)
+           (action-href service-document :lens/create-study)
+           m))
 
-(defn create-form-def! [study {:keys [id] :as req}]
-  (if-let [uri (-> study :actions :lens/create-form-def :href)]
-    (let [resp @(post-form uri (form-def-props req))]
-      (condp = (:status resp)
-        201
-        (log/spyf "Created form-def at %s" (->> resp :headers :location
-                                                (resolve-uri uri)))
-        (log/error "Failed to create form-def" id "status:" (:status resp))))
-    (log/error "Missing :lens/create-form-def form in study.")))
+;; ---- Form Def --------------------------------------------------------------
 
-(defnk update-form-def!
-  "Updates a form-def.
+(defn upsert-form-def! [study m]
+  {:pre [study]}
+  (upsert! (action-href study :lens/find-form-def)
+           (action-href study :lens/create-form-def)
+           m))
 
-  URI and ETag are from a GET request before."
-  [uri etag :- s/Str id :as req]
-  (let [resp @(update-resource uri etag (form-def-props req))]
-    (condp = (:status resp)
-      204
-      (log/debug "Updated form-def" id)
-      (log/error "Failed to update form-def" id "status:" (:status resp)))))
+;; ---- Item Group Def --------------------------------------------------------
 
-(defn upsert-form-def! [study {:keys [id] :as req}]
-  (if-let [uri (-> study :actions :lens/find-form-def :href)]
-    (let [resp (execute-query uri {:id id})]
-      (condp = (:status resp)
-        200
-        (let [form-def (:body resp)]
-          (when (not= (form-def-props req) (form-def-props form-def))
-            (update-form-def! (assoc req :uri (-> form-def :links :self :href)
-                                         :etag (-> resp :headers :etag))))
-          form-def)
-        404
-        (some-> (create-form-def! study req)
-                (fetch)
-                (extract-body-if-ok))
-        (log/error "Failed to find form-def" id "status:" (:status resp))))
-    (log/error "Missing :lens/find-form-def form in study.")))
+(defn upsert-item-group-def! [study m]
+  {:pre [study]}
+  (upsert! (action-href study :lens/find-item-group-def)
+           (action-href study :lens/create-item-group-def)
+           m))
 
-;; ---- item-group-def --------------------------------------------------------
+;; ---- Item Def --------------------------------------------------------
 
-(defn- item-group-def-props [m]
-  (select-keys m [:id :name :description]))
-
-(defn create-item-group-def! [study {:keys [id] :as req}]
-  (if-let [uri (-> study :actions :lens/create-item-group-def :href)]
-    (let [resp @(post-form uri (item-group-def-props req))]
-      (condp = (:status resp)
-        201
-        (log/spyf "Created item-group-def at %s" (->> resp :headers :location
-                                                      (resolve-uri uri)))
-        (log/error "Failed to create item-group-def" id "status:"
-                   (:status resp))))
-    (log/error "Missing :lens/create-item-group-def form in study.")))
-
-(defnk update-item-group-def!
-  "Updates an item-group-def.
-
-  URI and ETag are from a GET request before."
-  [uri etag :- s/Str id :as req]
-  (let [resp @(update-resource uri etag (item-group-def-props req))]
-    (condp = (:status resp)
-      204
-      (log/debug "Updated item-group-def" id)
-      (log/error "Failed to update item-group-def" id "status:"
-                 (:status resp)))))
-
-(defn upsert-item-group-def! [study {:keys [id] :as req}]
-  (if-let [uri (-> study :actions :lens/find-item-group-def :href)]
-    (let [resp (execute-query uri {:id id})]
-      (condp = (:status resp)
-        200
-        (let [item-group-def (:body resp)]
-          (when (not= (item-group-def-props req)
-                      (item-group-def-props item-group-def))
-            (update-item-group-def!
-              (assoc req :uri (-> item-group-def :links :self :href)
-                         :etag (-> resp :headers :etag))))
-          item-group-def)
-        404
-        (some-> (create-item-group-def! study req)
-                (fetch)
-                (extract-body-if-ok))
-        (log/error "Failed to find item-group def" id "status:"
-                   (:status resp))))
-    (log/error "Missing :lens/find-item-group-def form in study.")))
+(defn upsert-item-def! [study m]
+  {:pre [study]}
+  (upsert! (action-href study :lens/find-item-def)
+           (action-href study :lens/create-item-def)
+           m))

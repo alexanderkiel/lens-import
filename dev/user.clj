@@ -7,20 +7,25 @@
             [lens.study :refer [study-importer]]
             [lens.form-def :refer [form-def-importer]]
             [lens.item-group-def :refer [item-group-def-importer]]
+            [lens.item-def :refer [item-def-importer]]
             [lens.event-bus :as bus :refer [publish!]]
-            [lens.parse :refer [parse!]])
+            [lens.parse :refer [parse!]]
+            [lens.api :as api])
   (:import [java.net URI]))
 
 (defn create-system [^URI base-uri]
   (-> (component/system-map
-        :bus (bus/bus)
-        :study-importer (study-importer (.resolve base-uri "/find-study"))
+        :parse-bus (bus/bus "parse")
+        :warehouse-bus (bus/bus "warehouse")
+        :study-importer (study-importer (api/extract-body-if-ok (api/fetch base-uri)))
         :form-def-importer (form-def-importer)
-        :item-group-def-importer (item-group-def-importer))
+        :item-group-def-importer (item-group-def-importer)
+        :item-def-importer (item-def-importer))
       (component/system-using
-        {:study-importer [:bus]
-         :form-def-importer [:bus]
-         :item-group-def-importer [:bus]})))
+        {:study-importer [:parse-bus :warehouse-bus]
+         :form-def-importer [:parse-bus :warehouse-bus]
+         :item-group-def-importer [:parse-bus :warehouse-bus]
+         :item-def-importer [:parse-bus :warehouse-bus]})))
 
 (def system nil)
 
@@ -50,5 +55,5 @@
   (->> "samples/9814_who_five_well-being_.ODM.xml"
        #_"samples/9840_nci_standard_adverse.ODM.xml"
        (io/input-stream)
-       (parse! (:bus system)))
+       (parse! (:parse-bus system)))
   )

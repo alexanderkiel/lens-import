@@ -6,7 +6,7 @@
             [lens.parent-resolver :refer [parent-resolver]]))
 
 (defn- item-def-props [m]
-  (select-keys m [:id :name :data-type :description]))
+  (select-keys m [:id :name :data-type :description :question]))
 
 (defn- odm-item-def-with-study-handler [bus]
   (fn [study {:keys [id] :as odm-item-def}]

@@ -52,8 +52,9 @@
   (reset)
   (pst)
 
-  (->> "samples/9814_who_five_well-being_.ODM.xml"
-       #_"samples/9840_nci_standard_adverse.ODM.xml"
+  (->> #_"samples/9814_who_five_well-being_.ODM.xml"
+       "samples/9840_nci_standard_adverse.ODM.xml"
        (io/input-stream)
-       (parse! (:parse-bus system)))
+       (parse! (:parse-bus system))
+       (time))
   )

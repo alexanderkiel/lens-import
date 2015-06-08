@@ -12,6 +12,9 @@
 (defn description [loc]
   (xml1-> loc :Description (first-translated-text)))
 
+(defn question [loc]
+  (xml1-> loc :Question (first-translated-text)))
+
 ;; ---- Form Def --------------------------------------------------------------
 
 (defn parse-form-def-head [form-def]
@@ -45,7 +48,8 @@
        :name (xml1-> item-def (attr :Name))
        :data-type (convert-data-type (xml1-> item-def (attr :DataType)))
        :study-id (xml1-> (-> item-def zip/up zip/up) (attr :OID))}
-      (assoc-when :description (description item-def))))
+      (assoc-when :description (description item-def))
+      (assoc-when :question (question item-def))))
 
 (defn parse-item-def! [bus item-def]
   (publish! bus :item-def (parse-item-def-head item-def)))

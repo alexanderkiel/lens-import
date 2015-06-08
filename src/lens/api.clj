@@ -120,7 +120,8 @@
         (condp = (:status resp)
           204
           (log/debug "Updated" (str uri))
-          (log/error "Failed to update" (str uri) "status:" (:status resp)))))
+          (log/error "Failed to update" (str uri) "status:" (:status resp)
+                     "body:" (:body resp)))))
     edited))
 
 (defn update!

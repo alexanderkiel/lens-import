@@ -6,7 +6,7 @@
 (defrecord Bus [name]
   component/Lifecycle
   (start [this]
-    (let [publisher (async/chan 10)]
+    (let [publisher (async/chan)]
       (assoc this :publisher publisher
                   :publication (async/pub publisher #(:topic %)))))
   (stop [this]

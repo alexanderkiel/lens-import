@@ -6,6 +6,9 @@
             [clojure.zip :as zip]
             [lens.event-bus :refer [publish!]]))
 
+(defn study-id [loc]
+  (xml1-> (-> loc zip/up zip/up) (attr :OID)))
+
 (defn first-translated-text []
   (fn [loc] (xml1-> loc :TranslatedText text)))
 
@@ -15,12 +18,23 @@
 (defn question [loc]
   (xml1-> loc :Question (first-translated-text)))
 
+;; ---- Study Event Def -------------------------------------------------------
+
+(defn parse-study-event-def-head [study-event-def]
+  (-> {:id (xml1-> study-event-def (attr :OID))
+       :name (xml1-> study-event-def (attr :Name))
+       :study-id (study-id study-event-def)}
+      (assoc-when :description (description study-event-def))))
+
+(defn parse-study-event-def! [bus study-event-def]
+  (publish! bus :study-event-def (parse-study-event-def-head study-event-def)))
+
 ;; ---- Form Def --------------------------------------------------------------
 
 (defn parse-form-def-head [form-def]
   (-> {:id (xml1-> form-def (attr :OID))
        :name (xml1-> form-def (attr :Name))
-       :study-id (xml1-> (-> form-def zip/up zip/up) (attr :OID))}
+       :study-id (study-id form-def)}
       (assoc-when :description (description form-def))))
 
 (defn parse-form-def! [bus form-def]
@@ -31,7 +45,7 @@
 (defn parse-item-group-def-head [item-group-def]
   (-> {:id (xml1-> item-group-def (attr :OID))
        :name (xml1-> item-group-def (attr :Name))
-       :study-id (xml1-> (-> item-group-def zip/up zip/up) (attr :OID))}
+       :study-id (study-id item-group-def)}
       (assoc-when :description (description item-group-def))))
 
 (defn parse-item-group-def! [bus item-group-def]
@@ -47,7 +61,7 @@
   (-> {:id (xml1-> item-def (attr :OID))
        :name (xml1-> item-def (attr :Name))
        :data-type (convert-data-type (xml1-> item-def (attr :DataType)))
-       :study-id (xml1-> (-> item-def zip/up zip/up) (attr :OID))}
+       :study-id (study-id item-def)}
       (assoc-when :description (description item-def))
       (assoc-when :question (question item-def))))
 
@@ -57,6 +71,8 @@
 ;; ---- Meta Data Version -----------------------------------------------------
 
 (defn parse-meta-data-version! [bus meta-data-version]
+  (doseq [study-event-def (xml-> meta-data-version :StudyEventDef)]
+    (parse-study-event-def! bus study-event-def))
   (doseq [form-def (xml-> meta-data-version :FormDef)]
     (parse-form-def! bus form-def))
   (doseq [item-group-def (xml-> meta-data-version :ItemGroupDef)]
@@ -82,13 +98,15 @@
   "Parses an ODM XML file at input and publishes various events on bus.
 
   The events are:
-    :study          - a study with :id, :name and :description
-    :form-def       - a form-def with :id, :name, optional :description and
-                      :study-id
-    :item-group-def - an item-group-def with :id, :name, optional :description
-                      and :study-id
-    :item-def       - an item-def with :id, :name, :data-type, optional
-                      :description and :study-id
+    :study           - a study with :id, :name and :description
+    :study-event-def - a study-event-def with :id, :name, optional :description
+                       and :study-id
+    :form-def        - a form-def with :id, :name, optional :description and
+                       :study-id
+    :item-group-def  - an item-group-def with :id, :name, optional :description
+                       and :study-id
+    :item-def        - an item-def with :id, :name, :data-type, optional
+                       :description and :study-id
 
   Returns nil after all events could be published."
   [bus input]

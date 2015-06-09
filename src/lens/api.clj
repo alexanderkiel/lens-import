@@ -154,6 +154,14 @@
            (action-href service-document :lens/create-study)
            m))
 
+;; ---- Study Event Def --------------------------------------------------------------
+
+(defn upsert-study-event-def! [study m]
+  {:pre [study]}
+  (upsert! (action-href study :lens/find-study-event-def)
+           (action-href study :lens/create-study-event-def)
+           m))
+
 ;; ---- Form Def --------------------------------------------------------------
 
 (defn upsert-form-def! [study m]

@@ -5,6 +5,7 @@
             [clojure.tools.namespace.repl :refer [refresh]]
             [com.stuartsierra.component :as component]
             [lens.study :refer [study-importer]]
+            [lens.study-event-def :refer [study-event-def-importer]]
             [lens.form-def :refer [form-def-importer]]
             [lens.item-group-def :refer [item-group-def-importer]]
             [lens.item-def :refer [item-def-importer]]
@@ -18,12 +19,14 @@
         :parse-bus (bus/bus "parse")
         :warehouse-bus (bus/bus "warehouse")
         :study-importer (study-importer (api/extract-body-if-ok (api/fetch base-uri)))
+        :study-event-def-importer (study-event-def-importer)
         :form-def-importer (form-def-importer)
         :item-group-def-importer (item-group-def-importer)
         :item-def-importer (item-def-importer))
       (component/system-using
         {:study-importer [:parse-bus :warehouse-bus]
          :form-def-importer [:parse-bus :warehouse-bus]
+         :study-event-def-importer [:parse-bus :warehouse-bus]
          :item-group-def-importer [:parse-bus :warehouse-bus]
          :item-def-importer [:parse-bus :warehouse-bus]})))
 

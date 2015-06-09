@@ -192,11 +192,11 @@
 
 ;; ---- Study -----------------------------------------------------------------
 
-(defn upsert-study! [service-document m]
+(defn upsert-study! [service-document study-data]
   {:pre [service-document]}
   (upsert! (action-href service-document :lens/find-study)
            (action-href service-document :lens/create-study)
-           m))
+           study-data))
 
 ;; ---- Study Event Def --------------------------------------------------------------
 

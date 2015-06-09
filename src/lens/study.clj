@@ -6,19 +6,20 @@
             [lens.api :as api]
             [lens.event-bus :as bus]))
 
-(defn- study-props [m]
-  (select-keys m [:id :name :description]))
+(defn- study-handler
+  "Returns a function which takes parsed study data, upserts the corresponding
+  study and publishes it on the warehouse bus.
 
-(defn- odm-study-handler [service-document warehouse-bus]
-  (fnk [id :as odm-study]
-    (if-let [study (<!! (api/upsert-study! service-document (study-props odm-study)))]
-      (bus/publish!! warehouse-bus :study study)
-      (log/error "Error while upserting study" id))))
+  Returns immediately."
+  [service-document warehouse-bus]
+  (fn [study-data]
+    (->> (api/upsert-study! service-document study-data)
+         (bus/publish-from! warehouse-bus :study))))
 
 (defrecord StudyImporter [service-document parse-bus warehouse-bus]
   component/Lifecycle
   (start [this]
-    (->> (odm-study-handler service-document warehouse-bus)
+    (->> (study-handler service-document warehouse-bus)
          (bus/listen-on parse-bus :study)
          (assoc this :stop-fn)))
   (stop [this]

@@ -4,7 +4,7 @@
             [clojure.data.zip.xml :refer [xml-> xml1-> attr attr= text]]
             [clojure.tools.logging :as log]
             [clojure.zip :as zip]
-            [lens.event-bus :refer [publish!]]))
+            [lens.event-bus :refer [publish!!]]))
 
 (defn study-id [loc]
   (xml1-> (-> loc zip/up zip/up) (attr :OID)))
@@ -27,7 +27,7 @@
       (assoc-when :description (description study-event-def))))
 
 (defn parse-study-event-def! [bus study-event-def]
-  (publish! bus :study-event-def (parse-study-event-def-head study-event-def)))
+  (publish!! bus :study-event-def (parse-study-event-def-head study-event-def)))
 
 ;; ---- Form Def --------------------------------------------------------------
 
@@ -38,7 +38,7 @@
       (assoc-when :description (description form-def))))
 
 (defn parse-form-def! [bus form-def]
-  (publish! bus :form-def (parse-form-def-head form-def)))
+  (publish!! bus :form-def (parse-form-def-head form-def)))
 
 ;; ---- Item Group Def --------------------------------------------------------
 
@@ -49,7 +49,7 @@
       (assoc-when :description (description item-group-def))))
 
 (defn parse-item-group-def! [bus item-group-def]
-  (publish! bus :item-group-def (parse-item-group-def-head item-group-def)))
+  (publish!! bus :item-group-def (parse-item-group-def-head item-group-def)))
 
 ;; ---- Item Def --------------------------------------------------------------
 
@@ -66,7 +66,7 @@
       (assoc-when :question (question item-def))))
 
 (defn parse-item-def! [bus item-def]
-  (publish! bus :item-def (parse-item-def-head item-def)))
+  (publish!! bus :item-def (parse-item-def-head item-def)))
 
 ;; ---- Meta Data Version -----------------------------------------------------
 
@@ -88,7 +88,7 @@
    :description (xml1-> study :GlobalVariables :StudyDescription text)})
 
 (defn parse-study! [bus study]
-  (publish! bus :study (parse-study-head study))
+  (publish!! bus :study (parse-study-head study))
   (doseq [meta-data-version (xml-> study :MetaDataVersion)]
     (parse-meta-data-version! bus meta-data-version)))
 

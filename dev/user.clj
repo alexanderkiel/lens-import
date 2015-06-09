@@ -1,6 +1,7 @@
 (ns user
   (:use plumbing.core)
-  (:require [clojure.java.io :as io]
+  (:require [clojure.core.async :refer [<!!]]
+            [clojure.java.io :as io]
             [clojure.pprint :refer [pprint]]
             [clojure.tools.namespace.repl :refer [refresh]]
             [com.stuartsierra.component :as component]
@@ -9,7 +10,7 @@
             [lens.form-def :refer [form-def-importer]]
             [lens.item-group-def :refer [item-group-def-importer]]
             [lens.item-def :refer [item-def-importer]]
-            [lens.event-bus :as bus :refer [publish!]]
+            [lens.event-bus :as bus :refer [publish!!]]
             [lens.parse :refer [parse!]]
             [lens.api :as api])
   (:import [java.net URI]))
@@ -18,7 +19,7 @@
   (-> (component/system-map
         :parse-bus (bus/bus "parse")
         :warehouse-bus (bus/bus "warehouse")
-        :study-importer (study-importer (api/extract-body-if-ok (api/fetch base-uri)))
+        :study-importer (study-importer (api/extract-body-if-ok (<!! (api/fetch base-uri))))
         :study-event-def-importer (study-event-def-importer)
         :form-def-importer (form-def-importer)
         :item-group-def-importer (item-group-def-importer)

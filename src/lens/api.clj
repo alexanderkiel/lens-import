@@ -1,6 +1,7 @@
 (ns lens.api
   (:use plumbing.core)
-  (:require [clojure.java.io :as io]
+  (:require [clojure.core.async :as async :refer [go <!]]
+            [clojure.java.io :as io]
             [clojure.tools.logging :as log]
             [cognitect.transit :as transit]
             [schema.core :as s]
@@ -45,36 +46,63 @@
     resp))
 
 (defn fetch
-  "Fetches the uri with.
+  "Fetches the uri.
 
-  Bodies of transit responses are parsed already and have resolved URIs."
+  Returns a channel conveying the response. Bodies of transit responses are
+  parsed already and have resolved URIs."
   [uri]
-  (log/debug "Fetch" (str uri))
-  (let [resp @(http/request {:method :get
-                             :url (str uri)
-                             :headers {"Accept" "application/transit+json"}
-                             :as :stream})]
-    (parse-response uri resp)))
+  {:pre [uri]}
+  (let [ch (async/chan)]
+    (http/request
+      {:method :get
+       :url (str uri)
+       :headers {"Accept" "application/transit+json"}
+       :as :stream}
+      (fn [{:keys [opts error] :as resp}]
+        (if error
+          (log/error "Error while fetching" (:url opts))
+          (async/put! ch (parse-response uri resp)))
+        (async/close! ch)))
+    ch))
 
 (defn execute-query
   "Executes a query on uri with params.
 
-  Bodies of transit responses are parsed already and have resolved URIs."
+  Returns a channel conveying the response. Bodies of transit responses are
+  parsed already and have resolved URIs."
   [uri params]
   {:pre [uri (map? params)]}
-  (let [resp @(http/request {:method :get
-                             :url (str uri)
-                             :headers {"Accept" "application/transit+json"}
-                             :query-params (map-vals transit-write-str params)
-                             :as :stream})]
-    (parse-response uri resp)))
+  (let [ch (async/chan)]
+    (http/request
+      {:method :get
+       :url (str uri)
+       :headers {"Accept" "application/transit+json"}
+       :query-params (map-vals transit-write-str params)
+       :as :stream}
+      (fn [{:keys [opts error] :as resp}]
+        (if error
+          (log/error "Error while executing the query" (:url opts)
+                     (:query-params opts))
+          (async/put! ch (parse-response uri resp)))
+        (async/close! ch)))
+    ch))
 
-(defn post [uri params]
-  @(http/request {:method :post
-                  :url (str uri)
-                  :headers {"Accept" "application/transit+json"
-                            "Content-Type" "application/transit+json"}
-                  :body (write-transit params)}))
+(defn post
+  "Returns a channel conveying the response."
+  [uri params]
+  (let [ch (async/chan)]
+    (http/request
+      {:method :post
+       :url (str uri)
+       :headers {"Accept" "application/transit+json"
+                 "Content-Type" "application/transit+json"}
+       :body (write-transit params)}
+      (fn [{:keys [opts error] :as resp}]
+        (if error
+          (log/error "Error while posting" params "to" (:url opts))
+          (async/put! ch resp))
+        (async/close! ch)))
+    ch))
 
 (defn extract-body-if-ok [resp]
   (condp = (:status resp)
@@ -82,14 +110,21 @@
     (:body resp)
     (log/error "Got non-ok response with status:" (:status resp))))
 
-(defn update-resource [uri etag body]
-  (http/request
-    {:method :put
-     :url (str uri)
-     :headers {"If-Match" etag
-               "Accept" "application/transit+json"
-               "Content-Type" "application/transit+json"}
-     :body (write-transit body)}))
+(defn update-resource [uri etag data]
+  (let [ch (async/chan)]
+    (http/request
+      {:method :put
+       :url (str uri)
+       :headers {"If-Match" etag
+                 "Accept" "application/transit+json"
+                 "Content-Type" "application/transit+json"}
+       :body (write-transit data)}
+      (fn [{:keys [opts error] :as resp}]
+        (if error
+          (log/error "Error while updating" (:url opts))
+          (async/put! ch resp))
+        (async/close! ch)))
+    ch))
 
 (defn- etag [resp]
   (-> resp :headers :etag))
@@ -104,30 +139,36 @@
   (or (-> doc :actions id :href)
       (log/error "Can't find action" id "in" (keys (:actions doc)))))
 
-(defn create! [create-uri m]
-  (let [resp (post create-uri m)]
-    (condp = (:status resp)
-      201
-      (log/spyf "Created %s" (location create-uri resp))
-      (log/error "Failed to create" (:id m) "status:" (:status resp)
-                 "body:" (:body resp)))))
+(defn create!
+  "Returns a channel conveying the location on success."
+  [create-uri data]
+  (go
+    (let [resp (<! (post create-uri data))]
+      (condp = (:status resp)
+        201
+        (log/spyf "Created %s" (location create-uri resp))
+        (log/error "Failed to create" (:id data) "status:" (:status resp)
+                   "body:" (:body resp))))))
 
 (defn update-resp!
-  [resp m]
-  (let [original (:body resp) edited (merge original m)]
+  "Returns a channel conveying the updated data."
+  [resp changes]
+  (let [original (:body resp) edited (merge original changes)]
     (when (not= original edited)
-      (let [uri (self original) resp @(update-resource uri (etag resp) edited)]
-        (condp = (:status resp)
-          204
-          (log/debug "Updated" (str uri))
-          (log/error "Failed to update" (str uri) "status:" (:status resp)
-                     "body:" (:body resp)))))
-    edited))
+      (let [uri (self original)]
+        (go
+          (let [resp (<! (update-resource uri (etag resp) edited))]
+            (condp = (:status resp)
+              204
+              (do (log/debug "Updated" (str uri)) edited)
+              (log/error "Failed to update" (str uri) "status:" (:status resp)
+                         "body:" (:body resp)))))))
+    (go edited)))
 
 (defn update!
   "Updates the resource at uri with stuff in m."
   [uri m]
-  (let [resp (fetch uri)]
+  (let [resp (async/<!! (fetch uri))]
     (condp = (:status resp)
       200
       (update-resp! resp m)
@@ -136,15 +177,18 @@
 
 (defn upsert! [find-uri create-uri {:keys [id] :as m}]
   {:pre [find-uri]}
-  (let [resp (execute-query find-uri {:id id})]
-    (condp = (:status resp)
-      200
-      (update-resp! resp m)
-      404
-      (some-> (create! create-uri m)
-              (fetch)
-              (extract-body-if-ok))
-      (log/error "Failed to find" id "status:" (:status resp)))))
+  (go
+    (let [resp (<! (execute-query find-uri {:id id}))]
+      (condp = (:status resp)
+        200
+        (<! (update-resp! resp m))
+        404
+        (some-> (create! create-uri m)
+                (<!)
+                (fetch)
+                (<!)
+                (extract-body-if-ok))
+        (log/error "Failed to find" id "status:" (:status resp))))))
 
 ;; ---- Study -----------------------------------------------------------------
 

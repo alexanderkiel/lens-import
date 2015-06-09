@@ -1,6 +1,7 @@
 (ns lens.study
   (:use plumbing.core)
-  (:require [clojure.tools.logging :as log]
+  (:require [clojure.core.async :refer [<!!]]
+            [clojure.tools.logging :as log]
             [com.stuartsierra.component :as component]
             [lens.api :as api]
             [lens.event-bus :as bus]))
@@ -10,8 +11,8 @@
 
 (defn- odm-study-handler [service-document warehouse-bus]
   (fnk [id :as odm-study]
-    (if-let [study (api/upsert-study! service-document (study-props odm-study))]
-      (bus/publish! warehouse-bus :study study)
+    (if-let [study (<!! (api/upsert-study! service-document (study-props odm-study)))]
+      (bus/publish!! warehouse-bus :study study)
       (log/error "Error while upserting study" id))))
 
 (defrecord StudyImporter [service-document parse-bus warehouse-bus]

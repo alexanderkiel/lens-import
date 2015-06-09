@@ -1,12 +1,12 @@
 (ns lens.event-bus
-  (:require [clojure.core.async :as async :refer [go-loop <!]]
+  (:require [clojure.core.async :as async :refer [go go-loop <! >!]]
             [clojure.tools.logging :as log]
             [com.stuartsierra.component :as component]))
 
 (defrecord Bus [name]
   component/Lifecycle
   (start [this]
-    (let [publisher (async/chan)]
+    (let [publisher (async/chan 10)]
       (assoc this :publisher publisher
                   :publication (async/pub publisher #(:topic %)))))
   (stop [this]
@@ -18,10 +18,17 @@
   [name]
   (->Bus name))
 
-(defn publish! [bus topic msg]
+(defn publish!! [bus topic msg]
   {:pre [(:publisher bus)]}
   (log/debug "Publish on" (str (:name bus) "/" (name topic)) "<-" (pr-str msg))
   (async/>!! (:publisher bus) {:topic topic :msg msg}))
+
+(defn publish-from! [bus topic ch]
+  {:pre [(:publisher bus)]}
+  (go
+    (when-let [msg (<! ch)]
+      (log/debug "Publish on" (str (:name bus) "/" (name topic)) "<-" (pr-str msg))
+      (>! (:publisher bus) {:topic topic :msg msg}))))
 
 (defn listen-on
   "Listens on a topic of the bus.

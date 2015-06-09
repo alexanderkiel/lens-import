@@ -6,8 +6,8 @@
             [clojure.zip :as zip]
             [lens.event-bus :refer [publish!!]]))
 
-(defn study-id [loc]
-  (xml1-> (-> loc zip/up zip/up) (attr :OID)))
+(defn oid [loc]
+  (xml1-> loc (attr :OID)))
 
 (defn first-translated-text []
   (fn [loc] (xml1-> loc :TranslatedText text)))
@@ -21,9 +21,8 @@
 ;; ---- Study Event Def -------------------------------------------------------
 
 (defn parse-study-event-def-head [study-event-def]
-  (-> {:id (xml1-> study-event-def (attr :OID))
-       :name (xml1-> study-event-def (attr :Name))
-       :study-id (study-id study-event-def)}
+  (-> {:id (oid study-event-def)
+       :name (xml1-> study-event-def (attr :Name))}
       (assoc-when :description (description study-event-def))))
 
 (defn parse-study-event-def! [bus study-event-def]
@@ -32,9 +31,8 @@
 ;; ---- Form Def --------------------------------------------------------------
 
 (defn parse-form-def-head [form-def]
-  (-> {:id (xml1-> form-def (attr :OID))
-       :name (xml1-> form-def (attr :Name))
-       :study-id (study-id form-def)}
+  (-> {:id (oid form-def)
+       :name (xml1-> form-def (attr :Name))}
       (assoc-when :description (description form-def))))
 
 (defn parse-form-def! [bus form-def]
@@ -43,9 +41,8 @@
 ;; ---- Item Group Def --------------------------------------------------------
 
 (defn parse-item-group-def-head [item-group-def]
-  (-> {:id (xml1-> item-group-def (attr :OID))
-       :name (xml1-> item-group-def (attr :Name))
-       :study-id (study-id item-group-def)}
+  (-> {:id (oid item-group-def)
+       :name (xml1-> item-group-def (attr :Name))}
       (assoc-when :description (description item-group-def))))
 
 (defn parse-item-group-def! [bus item-group-def]
@@ -58,10 +55,9 @@
   (keyword data-type))
 
 (defn parse-item-def-head [item-def]
-  (-> {:id (xml1-> item-def (attr :OID))
+  (-> {:id (oid item-def)
        :name (xml1-> item-def (attr :Name))
-       :data-type (convert-data-type (xml1-> item-def (attr :DataType)))
-       :study-id (study-id item-def)}
+       :data-type (convert-data-type (xml1-> item-def (attr :DataType)))}
       (assoc-when :description (description item-def))
       (assoc-when :question (question item-def))))
 
@@ -83,11 +79,12 @@
 ;; ---- Study -----------------------------------------------------------------
 
 (defn parse-study-head [study]
-  {:id (xml1-> study (attr :OID))
+  {:id (oid study)
    :name (xml1-> study :GlobalVariables :StudyName text)
    :description (xml1-> study :GlobalVariables :StudyDescription text)})
 
 (defn parse-study! [bus study]
+  (log/debug "Start parsing study" (oid study))
   (publish!! bus :study (parse-study-head study))
   (doseq [meta-data-version (xml-> study :MetaDataVersion)]
     (parse-meta-data-version! bus meta-data-version)))

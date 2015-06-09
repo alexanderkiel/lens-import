@@ -4,13 +4,9 @@
             [lens.event-bus :as bus]
             [lens.parent-resolver :refer [parent-resolver]]))
 
-(defn- form-def-props [m]
-  (select-keys m [:id :name :description]))
-
 (defn- form-def-with-study-handler [bus]
   (fn [study form-def]
-    (->> (form-def-props form-def)
-         (api/upsert-form-def! study)
+    (->> (api/upsert-form-def! study form-def)
          (bus/publish-from! bus :form-def))))
 
 (defn form-def-importer []

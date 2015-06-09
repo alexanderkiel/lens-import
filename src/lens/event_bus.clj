@@ -84,16 +84,20 @@
   [res-bus bus res-topic topic callback]
   {:pre [(:publication bus)]}
   (let [ch (async/chan)
+        reset-ch (async/chan)
         res-ch (async/chan)]
     (async/sub (:publication bus) topic ch)
+    (async/sub (:publication bus) res-topic reset-ch)
     (async/sub (:publication res-bus) res-topic res-ch)
     (go-loop [res nil
-              ports [res-ch]]
+              ports [reset-ch]]
       (let [[{:keys [msg]} port] (async/alts! ports)]
         (when msg
           (condp = port
-            ch (do (callback res msg) (recur res [ch]))
-            res-ch (recur msg [ch])))))
+            ch (do (callback res msg) (recur res [ch reset-ch]))
+            reset-ch (recur nil [res-ch])
+            res-ch (recur msg [ch reset-ch])))))
     #(do
       (async/unsub (:publication bus) topic ch)
+      (async/unsub (:publication bus) res-topic reset-ch)
       (async/unsub (:publication res-bus) res-topic res-ch))))

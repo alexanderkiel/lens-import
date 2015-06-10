@@ -8,8 +8,11 @@
             [lens.study :refer [study-importer]]
             [lens.study-event-def :refer [study-event-def-importer]]
             [lens.form-def :refer [form-def-importer]]
+            [lens.form-ref :refer [form-ref-importer]]
             [lens.item-group-def :refer [item-group-def-importer]]
+            [lens.item-group-ref :refer [item-group-ref-importer]]
             [lens.item-def :refer [item-def-importer]]
+            [lens.item-ref :refer [item-ref-importer]]
             [lens.event-bus :as bus :refer [publish!!]]
             [lens.parse :refer [parse!]]
             [lens.api :as api])
@@ -22,14 +25,20 @@
         :study-importer (study-importer (api/extract-body-if-ok (<!! (api/fetch base-uri))))
         :study-event-def-importer (study-event-def-importer)
         :form-def-importer (form-def-importer)
+        :form-ref-importer (form-ref-importer)
         :item-group-def-importer (item-group-def-importer)
-        :item-def-importer (item-def-importer))
+        :item-group-ref-importer (item-group-ref-importer)
+        :item-def-importer (item-def-importer)
+        :item-ref-importer (item-ref-importer))
       (component/system-using
         {:study-importer [:parse-bus :warehouse-bus]
-         :form-def-importer [:parse-bus :warehouse-bus]
          :study-event-def-importer [:parse-bus :warehouse-bus]
+         :form-def-importer [:parse-bus :warehouse-bus]
+         :form-ref-importer [:parse-bus :warehouse-bus]
          :item-group-def-importer [:parse-bus :warehouse-bus]
-         :item-def-importer [:parse-bus :warehouse-bus]})))
+         :item-group-ref-importer [:parse-bus :warehouse-bus]
+         :item-def-importer [:parse-bus :warehouse-bus]
+         :item-ref-importer [:parse-bus :warehouse-bus]})))
 
 (def system nil)
 
@@ -57,8 +66,8 @@
   (pst)
 
   (->> #_"samples/9814_who_five_well-being_.ODM.xml"
-       #_"samples/9840_nci_standard_adverse.ODM.xml"
-       "samples/nci2.xml"
+       "samples/9840_nci_standard_adverse.ODM.xml"
+       #_"samples/nci2.xml"
        (io/input-stream)
        (parse! (:parse-bus system))
        (time))

@@ -18,6 +18,16 @@
 (defn question [loc]
   (xml1-> loc :Question (first-translated-text)))
 
+;; ---- Form Ref --------------------------------------------------------------
+
+(defn parse-form-ref [form-ref]
+  (-> {:form-id (xml1-> form-ref (attr :FormOID))
+       :mandatory (= "Yes" (xml1-> form-ref (attr :Mandatory)))}
+      (assoc-when :order-number (xml1-> form-ref (attr :OrderNumber)))))
+
+(defn parse-form-ref! [bus form-ref]
+  (publish!! bus :form-ref (parse-form-ref form-ref)))
+
 ;; ---- Study Event Def -------------------------------------------------------
 
 (defn parse-study-event-def-head [study-event-def]
@@ -26,7 +36,19 @@
       (assoc-when :description (description study-event-def))))
 
 (defn parse-study-event-def! [bus study-event-def]
-  (publish!! bus :study-event-def (parse-study-event-def-head study-event-def)))
+  (publish!! bus :study-event-def (parse-study-event-def-head study-event-def))
+  (doseq [form-ref (xml-> study-event-def :FormRef)]
+    (parse-form-ref! bus form-ref)))
+
+;; ---- Item Group Ref --------------------------------------------------------------
+
+(defn parse-item-group-ref [item-group-ref]
+  (-> {:item-group-id (xml1-> item-group-ref (attr :ItemGroupOID))
+       :mandatory (= "Yes" (xml1-> item-group-ref (attr :Mandatory)))}
+      (assoc-when :order-number (xml1-> item-group-ref (attr :OrderNumber)))))
+
+(defn parse-item-group-ref! [bus item-group-ref]
+  (publish!! bus :item-group-ref (parse-item-group-ref item-group-ref)))
 
 ;; ---- Form Def --------------------------------------------------------------
 
@@ -36,7 +58,19 @@
       (assoc-when :description (description form-def))))
 
 (defn parse-form-def! [bus form-def]
-  (publish!! bus :form-def (parse-form-def-head form-def)))
+  (publish!! bus :form-def (parse-form-def-head form-def))
+  (doseq [item-group-ref (xml-> form-def :ItemGroupRef)]
+    (parse-item-group-ref! bus item-group-ref)))
+
+;; ---- Item Ref --------------------------------------------------------------
+
+(defn parse-item-ref [item-ref]
+  (-> {:item-id (xml1-> item-ref (attr :ItemOID))
+       :mandatory (= "Yes" (xml1-> item-ref (attr :Mandatory)))}
+      (assoc-when :order-number (xml1-> item-ref (attr :OrderNumber)))))
+
+(defn parse-item-ref! [bus item-ref]
+  (publish!! bus :item-ref (parse-item-ref item-ref)))
 
 ;; ---- Item Group Def --------------------------------------------------------
 
@@ -46,7 +80,9 @@
       (assoc-when :description (description item-group-def))))
 
 (defn parse-item-group-def! [bus item-group-def]
-  (publish!! bus :item-group-def (parse-item-group-def-head item-group-def)))
+  (publish!! bus :item-group-def (parse-item-group-def-head item-group-def))
+  (doseq [item-ref (xml-> item-group-def :ItemRef)]
+    (parse-item-ref! bus item-ref)))
 
 ;; ---- Item Def --------------------------------------------------------------
 
@@ -70,9 +106,9 @@
   (doseq [study-event-def (xml-> meta-data-version :StudyEventDef)]
     (parse-study-event-def! bus study-event-def))
   (doseq [form-def (xml-> meta-data-version :FormDef)]
-    (parse-form-def! bus form-def))
+      (parse-form-def! bus form-def))
   (doseq [item-group-def (xml-> meta-data-version :ItemGroupDef)]
-    (parse-item-group-def! bus item-group-def))
+      (parse-item-group-def! bus item-group-def))
   (doseq [item-def (xml-> meta-data-version :ItemDef)]
     (parse-item-def! bus item-def)))
 

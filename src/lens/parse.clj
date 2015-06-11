@@ -12,7 +12,7 @@
 (defn first-translated-text []
   (fn [loc] (xml1-> loc :TranslatedText text)))
 
-(defn description [loc]
+(defn desc [loc]
   (xml1-> loc :Description (first-translated-text)))
 
 (defn question [loc]
@@ -33,7 +33,7 @@
 (defn parse-study-event-def-head [study-event-def]
   (-> {:id (oid study-event-def)
        :name (xml1-> study-event-def (attr :Name))}
-      (assoc-when :description (description study-event-def))))
+      (assoc-when :desc (desc study-event-def))))
 
 (defn parse-study-event-def! [bus study-event-def]
   (publish!! bus :study-event-def (parse-study-event-def-head study-event-def))
@@ -55,7 +55,7 @@
 (defn parse-form-def-head [form-def]
   (-> {:id (oid form-def)
        :name (xml1-> form-def (attr :Name))}
-      (assoc-when :description (description form-def))))
+      (assoc-when :desc (desc form-def))))
 
 (defn parse-form-def! [bus form-def]
   (publish!! bus :form-def (parse-form-def-head form-def))
@@ -77,7 +77,7 @@
 (defn parse-item-group-def-head [item-group-def]
   (-> {:id (oid item-group-def)
        :name (xml1-> item-group-def (attr :Name))}
-      (assoc-when :description (description item-group-def))))
+      (assoc-when :desc (desc item-group-def))))
 
 (defn parse-item-group-def! [bus item-group-def]
   (publish!! bus :item-group-def (parse-item-group-def-head item-group-def))
@@ -94,7 +94,7 @@
   (-> {:id (oid item-def)
        :name (xml1-> item-def (attr :Name))
        :data-type (convert-data-type (xml1-> item-def (attr :DataType)))}
-      (assoc-when :description (description item-def))
+      (assoc-when :desc (desc item-def))
       (assoc-when :question (question item-def))))
 
 (defn parse-item-def! [bus item-def]
@@ -117,7 +117,7 @@
 (defn parse-study-head [study]
   {:id (oid study)
    :name (xml1-> study :GlobalVariables :StudyName text)
-   :description (xml1-> study :GlobalVariables :StudyDescription text)})
+   :desc (xml1-> study :GlobalVariables :StudyDescription text)})
 
 (defn parse-study! [bus study]
   (log/debug "Start parsing study" (oid study))
@@ -131,15 +131,14 @@
   "Parses an ODM XML file at input and publishes various events on bus.
 
   The events are:
-    :study           - a study with :id, :name and :description
-    :study-event-def - a study-event-def with :id, :name, optional :description
-                       and :study-id
-    :form-def        - a form-def with :id, :name, optional :description and
+    :study           - a study with :id, :name and :desc
+    :study-event-def - a study-event-def with :id, :name, optional :desc and
                        :study-id
-    :item-group-def  - an item-group-def with :id, :name, optional :description
+    :form-def        - a form-def with :id, :name, optional :desc and :study-id
+    :item-group-def  - an item-group-def with :id, :name, optional :desc and
+                       :study-id
+    :item-def        - an item-def with :id, :name, :data-type, optional :desc
                        and :study-id
-    :item-def        - an item-def with :id, :name, :data-type, optional
-                       :description and :study-id
 
   Returns nil after all events could be published."
   [bus input]

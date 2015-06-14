@@ -5,6 +5,7 @@
             [clojure.pprint :refer [pprint]]
             [clojure.tools.namespace.repl :refer [refresh]]
             [com.stuartsierra.component :as component]
+            [hap-client.core :as hap]
             [lens.study :refer [study-importer]]
             [lens.study-event-def :refer [study-event-def-importer]]
             [lens.form-def :refer [form-def-importer]]
@@ -15,14 +16,14 @@
             [lens.item-ref :refer [item-ref-importer]]
             [lens.event-bus :as bus :refer [publish!!]]
             [lens.parse :refer [parse!]]
-            [lens.api :as api])
+            [lens.util :refer [<??]])
   (:import [java.net URI]))
 
 (defn create-system [^URI base-uri]
   (-> (component/system-map
         :parse-bus (bus/bus "parse")
         :warehouse-bus (bus/bus "warehouse")
-        :study-importer (study-importer (api/extract-body-if-ok (<!! (api/fetch base-uri))))
+        :study-importer (study-importer (<?? (hap/fetch base-uri)))
         :study-event-def-importer (study-event-def-importer)
         :form-def-importer (form-def-importer)
         :form-ref-importer (form-ref-importer)

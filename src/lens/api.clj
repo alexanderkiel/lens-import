@@ -1,35 +1,36 @@
 (ns lens.api
   (:use plumbing.core)
-  (:require [clojure.core.async :refer [go]]
+  (:require [clojure.core.async :refer [go <!]]
             [clojure.tools.logging :as log]
             [hap-client.core :as hap]
-            [lens.util :refer [<?]]))
+            [lens.util :refer [<? try-go]]))
 
 (defn- query [doc id]
-  (or (-> doc :actions id)
-      (log/error "Can't find query" id "in" (keys (:actions doc)))))
+  (or (-> doc :queries id)
+      (log/error "Can't find query" id "in" (keys (:queries doc)))))
 
 (defn- form [doc id]
-  (or (-> doc :actions id)
-      (log/error "Can't find form" id "in" (keys (:actions doc)))))
+  (or (-> doc :forms id)
+      (log/error "Can't find form" id "in" (keys (:forms doc)))))
 
 (defn update-rep!
   "Returns a channel conveying the updated representation or any errors."
   [rep changes]
-  (let [edited (merge rep changes)]
+  (let [edited (merge rep {:data changes})]
     (when (not= rep edited)
-      (let [res (:self (:links rep))]
+      (let [res (hap/resource (:self (:links rep)))]
         (hap/update res edited)))
     (go rep)))
 
 (defn upsert! [find-query create-form {:keys [id] :as data}]
   {:pre [find-query id]}
-  (go
-    (try
-      (if-let [result (<? (hap/execute find-query {:id id}))]
-        (<? (update-rep! result data))
-        (<? (hap/fetch (<? (hap/create create-form data)))))
-      (catch Throwable t t))))
+  (try-go
+    (let [result (<! (hap/execute find-query {:id id}))]
+      (if (instance? Throwable result)
+        (if (= 404 (:status (ex-data result)))
+          (<? (hap/fetch (<? (hap/create create-form data))))
+          (throw result))
+        (<? (update-rep! result data))))))
 
 ;; ---- Study -----------------------------------------------------------------
 

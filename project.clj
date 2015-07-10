@@ -4,15 +4,15 @@
 
   :min-lein-version "2.0.0"
 
-  :dependencies [[org.clojure/clojure "1.7.0-RC1"]
+  :dependencies [[org.clojure/clojure "1.7.0"]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
                  [org.clojure/data.xml "0.0.8"]
                  [org.clojure/data.zip "0.1.1"]
                  [org.clojure/tools.cli "0.3.1"]
                  [org.clojure/tools.logging "0.3.1"]
                  [org.clojure/tools.reader "0.9.2"]
-                 [prismatic/plumbing "0.4.3"]
-                 [hap-client-clj "0.1-SNAPSHOT"
+                 [prismatic/plumbing "0.4.4"]
+                 [org.clojars.akiel/hap-client-clj "0.1-SNAPSHOT"
                   :exclusions [org.clojure/clojurescript]]
                  [com.stuartsierra/component "0.2.3"]
                  [clj-time "0.6.0"]

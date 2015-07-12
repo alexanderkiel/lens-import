@@ -7,12 +7,13 @@
 
 (defn- item-group-ref-handler [bus]
   (fn [form-def item-group-ref item-group-def]
-    (log/debug "Can handle item-group-ref from" (:id form-def)
+    (log/debug "Can handle item-group-ref from" (:id (:data form-def))
                "to" (:item-group-id item-group-ref)
-               "and" (:id item-group-def))))
+               "and" (:id (:data item-group-def)))))
 
 (defn- def-pred [item-group-ref item-group-def]
-  (= (:item-group-id item-group-ref) (:id item-group-def)))
+  {:pre [(:item-group-id item-group-ref)]}
+  (= (:item-group-id item-group-ref) (:id (:data item-group-def))))
 
 (defn item-group-ref-importer []
   (ref-resolver "form" "item-group" def-pred item-group-ref-handler))

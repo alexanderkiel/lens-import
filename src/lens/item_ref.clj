@@ -7,11 +7,12 @@
 
 (defn- item-ref-handler [bus]
   (fn [item-group-def item-ref item-def]
-    (log/debug "Can handle item-ref from" (:id item-group-def)
-               "to" (:item-id item-ref) "and" (:id item-def))))
+    (log/debug "Can handle item-ref from" (:id (:data item-group-def))
+               "to" (:item-id item-ref) "and" (:id (:data item-def)))))
 
 (defn- def-pred [item-ref item-def]
-  (= (:item-id item-ref) (:id item-def)))
+  {:pre [(:item-id item-ref)]}
+  (= (:item-id item-ref) (:id (:data item-def))))
 
 (defn item-ref-importer []
   (ref-resolver "item-group" "item" def-pred item-ref-handler))

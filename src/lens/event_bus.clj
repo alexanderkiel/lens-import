@@ -1,9 +1,10 @@
 (ns lens.event-bus
   (:require [clojure.core.async :as async :refer [go go-loop <! >!]]
             [clojure.tools.logging :as log]
+            [schema.core :as s :refer [Str]]
             [com.stuartsierra.component :as component]))
 
-(defrecord Bus [name]
+(defrecord RBus [name]
   component/Lifecycle
   (start [this]
     (let [publisher (async/chan)]
@@ -13,10 +14,13 @@
     (async/close! (:publisher this))
     (dissoc this :publisher :publication)))
 
+(def Bus
+  (s/record RBus {:name Str}))
+
 (defn bus
   "Creates a new event bus."
   [name]
-  (->Bus name))
+  (->RBus name))
 
 (defn publish!! [bus topic msg]
   {:pre [(:publisher bus)]}

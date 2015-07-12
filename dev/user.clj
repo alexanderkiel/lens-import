@@ -25,21 +25,21 @@
         :warehouse-bus (bus/bus "warehouse")
         :study-importer (study-importer (<?? (hap/fetch base-uri)))
         :study-event-def-importer (study-event-def-importer)
-        :form-def-importer (form-def-importer)
         :form-ref-importer (form-ref-importer)
-        :item-group-def-importer (item-group-def-importer)
+        :form-def-importer (form-def-importer)
         :item-group-ref-importer (item-group-ref-importer)
-        :item-def-importer (item-def-importer)
-        :item-ref-importer (item-ref-importer))
+        :item-group-def-importer (item-group-def-importer)
+        :item-ref-importer (item-ref-importer)
+        :item-def-importer (item-def-importer))
       (component/system-using
         {:study-importer [:parse-bus :warehouse-bus]
          :study-event-def-importer [:parse-bus :warehouse-bus]
-         :form-def-importer [:parse-bus :warehouse-bus]
          :form-ref-importer [:parse-bus :warehouse-bus]
-         :item-group-def-importer [:parse-bus :warehouse-bus]
+         :form-def-importer [:parse-bus :warehouse-bus]
          :item-group-ref-importer [:parse-bus :warehouse-bus]
-         :item-def-importer [:parse-bus :warehouse-bus]
-         :item-ref-importer [:parse-bus :warehouse-bus]})))
+         :item-group-def-importer [:parse-bus :warehouse-bus]
+         :item-ref-importer [:parse-bus :warehouse-bus]
+         :item-def-importer [:parse-bus :warehouse-bus]})))
 
 (def system nil)
 

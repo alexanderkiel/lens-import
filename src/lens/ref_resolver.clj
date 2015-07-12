@@ -4,7 +4,8 @@
   (:require [clojure.core.async :as async :refer [go-loop]]
             [clojure.tools.logging :as log]
             [com.stuartsierra.component :as component]
-            [lens.event-bus :as bus]))
+            [schema.core :as s :refer [Any]]
+            [lens.event-bus :refer [Bus]]))
 
 (defn wait-for
   "parent-name: study-event, ...
@@ -26,8 +27,15 @@
               refs []
               defs []
               ports [reset-ch def-ch]]
-      (log/debug (str "Refs [" entity-name "]:")
-                 (mapv (fn [{:keys [parent ref]}] [(:id parent) ref]) refs))
+      (log/trace entity-name "-" "ports" (mapv {ref-ch 'ref-ch
+                                                reset-ch 'reset-ch
+                                                parent-ch 'parent-ch
+                                                def-ch 'def-ch}
+                                               ports))
+      (log/trace entity-name "-" "parent" parent)
+      (log/trace entity-name "-" "refs"
+                 (mapv (fn [{:keys [parent ref]}] [(:id (:data parent)) ref]) refs))
+      (log/trace entity-name "-" "defs" defs)
       (let [[{:keys [msg]} port] (async/alts! ports)]
         (when msg
           (condp = port
@@ -37,24 +45,27 @@
             ;; Call callback if the def is available
             ;; Otherwise collect the ref with its parent
             ref-ch
-            (if-let [def (some #(def-pred msg %) defs)]
-              (do (callback parent msg def)
-                  (recur parent refs defs [ref-ch reset-ch def-ch]))
-              (recur parent (conj refs {:parent parent :ref msg}) defs
-                     [ref-ch reset-ch def-ch]))
+            (do (log/trace entity-name "-" "Got ref" msg)
+                (if-let [def (some #(when (def-pred msg %) %) defs)]
+                  (do (callback parent msg def)
+                      (recur parent refs defs [ref-ch reset-ch def-ch]))
+                  (recur parent (conj refs {:parent parent :ref msg}) defs
+                         [ref-ch reset-ch def-ch])))
 
             reset-ch
-            (recur nil refs defs [parent-ch])
+            (do (log/trace entity-name "-" "reset")
+                (recur nil refs defs [parent-ch]))
 
             parent-ch
-            (recur msg refs defs [ref-ch reset-ch def-ch])
+            (do (log/trace entity-name "-""Got parent" msg)
+                (recur msg refs defs [ref-ch reset-ch def-ch]))
 
             ;; We get a new def as msg
             ;;
             ;; Call callback on all refs which want this def
             ;; Collect the def
             def-ch
-            (do (log/debug (str "Got def [" entity-name "]:") msg)
+            (do (log/trace entity-name "-" "Got def" msg)
                 (doseq [{:keys [parent ref]} (filter #(def-pred (:ref %) msg) refs)]
                   (callback parent ref msg))
                 (recur parent (remove #(def-pred (:ref %) msg) refs) (conj defs msg)
@@ -77,6 +88,12 @@
     ((:stop-fn this))
     (dissoc this :stop-fn)))
 
-(defn ref-resolver [parent-name entity-name def-pred callback]
+(def Parent Any)
+(def Ref Any)
+(def Def Any)
+
+(s/defn ref-resolver
+  [parent-name entity-name def-pred
+   callback :- (s/=> (s/=>* Any [Parent Ref Def]) Bus)]
   (map->RefResolver {:parent-name parent-name :entity-name entity-name
                      :def-pred def-pred :callback callback}))

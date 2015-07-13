@@ -5,8 +5,8 @@
             [lens.parent-resolver :refer [parent-resolver]]))
 
 (defn- study-event-def-with-study-handler [bus]
-  (fn [study study-event-def]
-    (->> (api/upsert-study-event-def! study study-event-def)
+  (fn [study study-event-data]
+    (->> (api/upsert-study-event-def! study study-event-data)
          (bus/publish-from! bus :study-event-def))))
 
 (defn study-event-def-importer []

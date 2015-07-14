@@ -84,7 +84,11 @@
       (async/unsub (:publication bus) topic ch))))
 
 (defn wait-for
-  ""
+  "Waits for resources on res-bus/res-topic before invoking the callback with
+  messages from bus/topic.
+
+  The callback has to return a channel which closes after the callback has
+  finished."
   [res-bus bus res-topic topic callback]
   {:pre [(:publication bus)]}
   (let [ch (async/chan)
@@ -93,14 +97,35 @@
     (async/sub (:publication bus) topic ch)
     (async/sub (:publication bus) res-topic reset-ch)
     (async/sub (:publication res-bus) res-topic res-ch)
+    (log/debug "wait-for" topic "enter")
     (go-loop [res nil
-              ports [reset-ch]]
-      (let [[{:keys [msg]} port] (async/alts! ports)]
-        (when msg
+              ports [reset-ch]
+              callbacks (list)]
+      (log/trace "wait-for" topic "select on"
+                 (mapv {ch 'ch reset-ch 'reset-ch res-ch 'res-ch} ports)
+                 "and" (count callbacks) "callback(s)")
+      (let [[{:keys [msg] :as val} port] (async/alts! (into ports callbacks))]
+        (if val
           (condp = port
-            ch (do (<! (callback res msg)) (recur res [ch reset-ch]))
-            reset-ch (recur nil [res-ch])
-            res-ch (recur msg [ch reset-ch])))))
+            ch
+            (do
+              (log/trace "wait-for" topic "callback" (:id (:data res)) (:id msg))
+              (let [callback (callback res msg)]
+                (recur res
+                       (if (< (count callbacks) 100)
+                         [ch reset-ch]
+                         [reset-ch])
+                       (conj callbacks callback))))
+
+            reset-ch
+            (do (doseq [callback callbacks]
+                  (<! callback))
+                (recur nil [res-ch] (list)))
+
+            res-ch (recur msg [ch reset-ch] (list))
+
+            (recur res [ch reset-ch] (remove #{port} callbacks)))
+          (log/debug "wait-for" topic "exit"))))
     #(do
       (async/unsub (:publication bus) topic ch)
       (async/unsub (:publication bus) res-topic reset-ch)

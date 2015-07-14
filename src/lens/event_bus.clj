@@ -98,7 +98,7 @@
       (let [[{:keys [msg]} port] (async/alts! ports)]
         (when msg
           (condp = port
-            ch (do (callback res msg) (recur res [ch reset-ch]))
+            ch (do (<! (callback res msg)) (recur res [ch reset-ch]))
             reset-ch (recur nil [res-ch])
             res-ch (recur msg [ch reset-ch])))))
     #(do

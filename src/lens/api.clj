@@ -18,8 +18,7 @@
   [rep changes]
   (let [edited (merge rep {:data changes})]
     (when (not= rep edited)
-      (let [res (hap/resource (:self (:links rep)))]
-        (hap/update res edited)))
+      (hap/update (:self (:links rep)) edited))
     (go rep)))
 
 (defn upsert! [find-query create-form {:keys [id] :as data}]

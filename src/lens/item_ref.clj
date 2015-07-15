@@ -9,9 +9,5 @@
     (->> (api/create-item-ref! item-group-def item-ref)
          (bus/publish-from! bus :item-ref))))
 
-(defn- def-pred [item-ref item-def]
-  {:pre [(:item-id item-ref)]}
-  (= (:item-id item-ref) (:id (:data item-def))))
-
 (defn item-ref-importer []
-  (ref-resolver "item-group" "item" def-pred item-ref-handler))
+  (ref-resolver "item-group" "item" :item-id item-ref-handler))

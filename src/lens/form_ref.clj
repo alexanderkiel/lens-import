@@ -9,9 +9,5 @@
     (->> (api/create-form-ref! study-event-def form-ref)
          (bus/publish-from! bus :form-ref))))
 
-(defn- def-pred [form-ref form-def]
-  {:pre [(:form-id form-ref)]}
-  (= (:form-id form-ref) (:id (:data form-def))))
-
 (defn form-ref-importer []
-  (ref-resolver "study-event" "form" def-pred form-ref-handler))
+  (ref-resolver "study-event" "form" :form-id form-ref-handler))

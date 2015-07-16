@@ -77,91 +77,102 @@
     (->> (async/chan 1 (assoc-xf :type :item-ref))
          (async/pipe (api/create-item-ref! item-group-def ref)))))
 
-(defn- constrain-jobs [jobs n parse-ch]
-  (if (< (:count jobs) n) [parse-ch] []))
+(defn- handle-item-ref [state val]
+  (update state :refs #(collect-item-ref % val)))
+
+(defn- handle-item-def [state val]
+  (let [job (submit-job! api/upsert-item-def! :item-def (:parent state) val)]
+    (update state :jobs #(add-job % :item job))))
 
 (defn import! [service-document n parse-ch]
-  (go-loop [ports [parse-ch]
-            jobs {:count 0}
-            study service-document
-            defs {}
-            refs {}]
-    (log/debug "--------------------------------------------------")
-    (log/debug "Parent:" (:data study))
-    (log/debug "Defs:  " defs)
-    (log/debug "Refs:  " refs)
-    (log/debug "Jobs:  " (map-vals count (dissoc jobs :count)))
-    (log/debug "--------------------------------------------------")
-    (let [[val port] (async/alts! (into ports (select-jobs jobs)))]
-      (if val
-        (if (= parse-ch port)
-          (do (log/debug "Parsed" (:type val) (:id val))
+  (let [constrain-jobs
+        (fn [state]
+          (if (< (:count (:jobs state)) n) [parse-ch] []))]
+    (go-loop [ports [parse-ch]
+              state {:parent service-document
+                     :jobs {:count 0}
+                     :defs {}
+                     :refs {}}]
+      (log/debug "--------------------------------------------------")
+      (log/debug "Parent:" (:data (:parent state)))
+      (log/debug "Jobs:  " (map-vals count (dissoc (:jobs state) :count)))
+      (log/debug "--------------------------------------------------")
+      (let [[val port] (async/alts! (into ports (select-jobs (:jobs state))))]
+        (if val
+          (if (= parse-ch port)
+            (do (log/debug "Parsed" (:type val) (:id val))
+                (case (:type val)
+                  :study
+                  (let [job (async/pipe (api/upsert-study! (:parent state) val)
+                                        (async/chan 1 (assoc-xf :type :study)))]
+                    (recur [] (update state :jobs #(add-job % :study job))))
+
+                  :form-ref
+                  (recur (constrain-jobs state)
+                         (update state :refs #(collect-form-ref % val)))
+
+                  :form-def
+                  (let [job (submit-job! api/upsert-form-def! :form-def (:parent state) val)]
+                    (recur (constrain-jobs state)
+                           (update state :jobs #(add-job % :form job))))
+
+                  :item-group-ref
+                  (recur (constrain-jobs state)
+                         (update state :refs #(collect-item-group-ref % val)))
+
+                  :item-group-def
+                  (let [job (submit-job! api/upsert-item-group-def! :item-group-def (:parent state) val)]
+                    (recur (constrain-jobs state)
+                           (update state :jobs #(add-job % :item-group job))))
+
+                  :item-ref
+                  (recur (constrain-jobs state) (handle-item-ref state val))
+
+                  :item-def
+                  (recur (constrain-jobs state) (handle-item-def state val))))
+
+            ;; jobs
+            (do
+              (log/debug "Finished" (:type val) (:id (:data val)))
               (case (:type val)
                 :study
-                (let [job (async/pipe (api/upsert-study! study val)
-                                      (async/chan 1 (assoc-xf :type :study)))]
-                  (recur [] (add-job jobs :study job) nil defs refs))
-
-                :form-ref
-                (recur (constrain-jobs jobs n parse-ch) jobs
-                       study defs (collect-form-ref refs val))
+                (recur (constrain-jobs state)
+                       (-> (update state :jobs #(remove-job % :study port))
+                           (assoc :parent val)))
 
                 :form-def
-                (let [job (submit-job! api/upsert-form-def! :form-def study val)]
-                  (recur (constrain-jobs jobs n parse-ch)
-                         (add-job jobs :form job) study defs refs))
+                (recur (constrain-jobs state)
+                       (-> (update state :jobs #(remove-job % :form port))
+                           (update :defs #(collect-form-def % val))))
 
                 :item-group-ref
-                (recur (constrain-jobs jobs n parse-ch) jobs study defs
-                       (collect-item-group-ref refs val))
+                (recur (constrain-jobs state)
+                       (update state :jobs #(remove-job % :item-group port)))
 
                 :item-group-def
-                (let [job (submit-job! api/upsert-item-group-def! :item-group-def
-                                       study val)]
-                  (recur (constrain-jobs jobs n parse-ch) (add-job jobs :item-group job) study defs refs))
+                (let [create-ref (map #(create-item-group-ref-job (get-in state [:defs (:study-id val)]) %))
+                      ref-vec [(:study-id val) :item-group-refs (:id (:data val))]
+                      ref-jobs (eduction create-ref (get-in state [:refs ref-vec]))]
+                  (recur (constrain-jobs state)
+                         (-> (update state :jobs #(-> (remove-job % :item-group port)
+                                                      (add-jobs :item-group ref-jobs)))
+                             (update :defs #(collect-item-group-def % val))
+                             (update :refs #(dissoc-in % ref-vec)))))
 
                 :item-ref
-                (recur (constrain-jobs jobs n parse-ch) jobs study defs (collect-item-ref refs val))
+                (recur (constrain-jobs state)
+                       (update state :jobs #(remove-job % :item port)))
 
                 :item-def
-                (let [job (submit-job! api/upsert-item-def! :item-def study val)]
-                  (recur (constrain-jobs jobs n parse-ch) (add-job jobs :item job) study defs refs))
+                (let [create-ref (map #(create-item-ref-job (get-in state [:defs (:study-id val)]) %))
+                      ref-vec [(:study-id val) :item-refs (:id (:data val))]
+                      ref-jobs (eduction create-ref (get-in state [:refs ref-vec]))]
+                  (recur (constrain-jobs state)
+                         (-> (update state :jobs #(-> (remove-job % :item port)
+                                                      (add-jobs :item ref-jobs)))
+                             (update :refs #(dissoc-in % ref-vec))))))))
 
-                (recur (constrain-jobs jobs n parse-ch) jobs study defs refs)))
-
-          ;; jobs
-          (do
-            (log/debug "Finished" (:type val) (:id (:data val)))
-            (case (:type val)
-              :study
-              (recur (constrain-jobs jobs n parse-ch) (remove-job jobs :study port) val defs refs)
-
-              :form-def
-              (recur (constrain-jobs jobs n parse-ch) (remove-job jobs :form port) study (collect-form-def defs val) refs)
-
-              :item-group-ref
-              (recur (constrain-jobs jobs n parse-ch) (remove-job jobs :item-group port) study defs refs)
-
-              :item-group-def
-              (let [create-ref (map #(create-item-group-ref-job (defs (:study-id val)) %))
-                    ref-vec [(:study-id val) :item-group-refs (:id (:data val))]
-                    ref-jobs (eduction create-ref (get-in refs ref-vec))
-                    jobs (-> (remove-job jobs :item-group port)
-                             (add-jobs :item-group ref-jobs))]
-                (recur (constrain-jobs jobs n parse-ch) jobs study (collect-item-group-def defs val) (dissoc-in refs ref-vec)))
-
-              :item-ref
-              (recur (constrain-jobs jobs n parse-ch) (remove-job jobs :item port) study defs refs)
-
-              :item-def
-              (let [create-ref (map #(create-item-ref-job (defs (:study-id val)) %))
-                    ref-vec [(:study-id val) :item-refs (:id (:data val))]
-                    ref-jobs (eduction create-ref (get-in refs ref-vec))
-                    jobs (-> (remove-job jobs :item port)
-                             (add-jobs :item ref-jobs))]
-                (recur (constrain-jobs jobs n parse-ch) jobs study defs (dissoc-in refs ref-vec))))))
-
-        (if (= 0 (:count jobs))
-          (log/info "Finished!")
-          (recur [] jobs study defs refs))))))
+          (if (= 0 (:count (:jobs state)))
+            (log/info "Finished!")
+            (recur [] state)))))))
 

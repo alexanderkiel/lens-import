@@ -1,24 +1,8 @@
 (ns lens.import
   (:use plumbing.core)
-  (:require [clojure.core.async :as async :refer [<!! go-loop]]
-            [clojure.java.io :as io]
+  (:require [clojure.core.async :as async :refer [go-loop]]
             [clojure.tools.logging :as log]
-            [clojure.pprint :refer [pprint]]
-            [clojure.tools.namespace.repl :refer [refresh]]
             [schema.core :as s]
-            [com.stuartsierra.component :as component]
-            [hap-client.core :as hap]
-            [lens.study :refer [study-importer]]
-            [lens.study-event-def :refer [study-event-def-importer]]
-            [lens.form-def :refer [form-def-importer]]
-            [lens.form-ref :refer [form-ref-importer]]
-            [lens.item-group-def :refer [item-group-def-importer]]
-            [lens.item-group-ref :refer [item-group-ref-importer]]
-            [lens.item-def :refer [item-def-importer]]
-            [lens.item-ref :refer [item-ref-importer]]
-            [lens.event-bus :as bus :refer [publish!!]]
-            [lens.parse :as p :refer [parse!]]
-            [lens.util :refer [<??]]
             [lens.api :as api]))
 
 (defn- assoc-xf [& kvs]
@@ -132,7 +116,7 @@
         (update :defs #(collect-item-group-def % val))
         (update :refs #(dissoc-in % ref-vec)))))
 
-(defn handle-item-ref-job [state port val]
+(defn handle-item-ref-job [state port _]
   (update state :jobs #(remove-job % :item port)))
 
 (defn handle-item-def-job [state port val]

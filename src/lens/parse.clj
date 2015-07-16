@@ -4,8 +4,7 @@
             [clojure.data.xml :as xml]
             [clojure.data.zip.xml :refer [xml-> xml1-> attr attr= text]]
             [clojure.tools.logging :as log]
-            [clojure.zip :as zip]
-            [lens.event-bus :refer [>!!]]))
+            [clojure.zip :as zip]))
 
 ;; ---- Private ---------------------------------------------------------------
 
@@ -29,8 +28,8 @@
        :mandatory (= "Yes" (xml1-> form-ref (attr :Mandatory)))}
       (assoc-when :order-number (xml1-> form-ref (attr :OrderNumber)))))
 
-(defn parse-form-ref! [bus form-ref]
-  (>!! bus (parse-form-ref form-ref)))
+(defn parse-form-ref! [ch form-ref]
+  (>!! ch (parse-form-ref form-ref)))
 
 ;; ---- Study Event Def -------------------------------------------------------
 
@@ -40,10 +39,10 @@
        :name (xml1-> study-event-def (attr :Name))}
       (assoc-when :desc (desc study-event-def))))
 
-(defn parse-study-event-def! [bus study-event-def]
-  (>!! bus (parse-study-event-def-head study-event-def))
+(defn parse-study-event-def! [ch study-event-def]
+  (>!! ch (parse-study-event-def-head study-event-def))
   (doseq [form-ref (xml-> study-event-def :FormRef)]
-    (parse-form-ref! bus form-ref)))
+    (parse-form-ref! ch form-ref)))
 
 ;; ---- Item Group Ref --------------------------------------------------------------
 
@@ -53,8 +52,8 @@
        :mandatory (= "Yes" (xml1-> item-group-ref (attr :Mandatory)))}
       (assoc-when :order-number (xml1-> item-group-ref (attr :OrderNumber)))))
 
-(defn parse-item-group-ref! [bus item-group-ref]
-  (>!! bus (parse-item-group-ref item-group-ref)))
+(defn parse-item-group-ref! [ch item-group-ref]
+  (>!! ch (parse-item-group-ref item-group-ref)))
 
 ;; ---- Form Def --------------------------------------------------------------
 
@@ -64,10 +63,10 @@
        :name (xml1-> form-def (attr :Name))}
       (assoc-when :desc (desc form-def))))
 
-(defn parse-form-def! [bus form-def]
-  (>!! bus (parse-form-def-head form-def))
+(defn parse-form-def! [ch form-def]
+  (>!! ch (parse-form-def-head form-def))
   (doseq [item-group-ref (xml-> form-def :ItemGroupRef)]
-    (parse-item-group-ref! bus item-group-ref)))
+    (parse-item-group-ref! ch item-group-ref)))
 
 ;; ---- Item Ref --------------------------------------------------------------
 
@@ -88,10 +87,10 @@
        :name (xml1-> item-group-def (attr :Name))}
       (assoc-when :desc (desc item-group-def))))
 
-(defn parse-item-group-def! [bus item-group-def]
-  (>!! bus (parse-item-group-def-head item-group-def))
+(defn parse-item-group-def! [ch item-group-def]
+  (>!! ch (parse-item-group-def-head item-group-def))
   (doseq [item-ref (xml-> item-group-def :ItemRef)]
-    (parse-item-ref! bus item-ref)))
+    (parse-item-ref! ch item-ref)))
 
 ;; ---- Item Def --------------------------------------------------------------
 
@@ -136,10 +135,41 @@
   (doseq [meta-data-version (xml-> study :MetaDataVersion)]
     (parse-meta-data-version! ch meta-data-version)))
 
+;; ---- Resolve Parent Ids ----------------------------------------------------
+
+(def parent-xf
+  (fn [rf]
+    (let [study (volatile! ::none)
+          form-def (volatile! ::none)
+          item-group-def (volatile! ::none)]
+      (fn
+        ([] (rf))
+        ([result] (rf result))
+        ([result input]
+          (case (:type input)
+            :study
+            (do (vreset! study (:id input))
+                (rf result input))
+            :form-ref
+            (rf result (assoc input :study-id @study))
+            :form-def
+            (do (vreset! form-def (:id input))
+                (rf result (assoc input :study-id @study)))
+            :item-group-ref
+            (rf result (assoc input :study-id @study :form-def-id @form-def))
+            :item-group-def
+            (do (vreset! item-group-def (:id input))
+                (rf result (assoc input :study-id @study)))
+            :item-ref
+            (rf result (assoc input :study-id @study
+                                    :item-group-def-id @item-group-def))
+            :item-def
+            (rf result (assoc input :study-id @study))))))))
+
 ;; ---- Public API ------------------------------------------------------------
 
 (defn parse!
-  "Parses an ODM XML file at input and publishes various events on bus.
+  "Parses an ODM XML file at input and publishes various events on ch.
 
   The events are:
     :study           - a study with :id, :name and :desc
@@ -160,4 +190,4 @@
           (doseq [study (xml-> root :Study)]
             (parse-study! ch study)))
         (async/close! ch)))
-    ch))
+    (async/pipe ch (async/chan 1 parent-xf))))

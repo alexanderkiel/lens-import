@@ -6,10 +6,7 @@
     </encoder>
   </appender>
 
-  <logger name="lens.api" level="DEBUG"/>
-  <logger name="lens.ref-resolver" level="INFO"/>
-
-  <root level="DEBUG">
+  <root level="INFO">
     <appender-ref ref="STDOUT"/>
   </root>
 

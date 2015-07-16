@@ -77,12 +77,81 @@
     (->> (async/chan 1 (assoc-xf :type :item-ref))
          (async/pipe (api/create-item-ref! item-group-def ref)))))
 
+(defn handle-study [state val]
+  (let [job (->> (async/chan 1 (assoc-xf :type :study))
+                 (async/pipe (api/upsert-study! (:parent state) val)))]
+    (update state :jobs #(add-job % :study job))))
+
+(defn handle-form-ref [state val]
+  (update state :refs #(collect-form-ref % val)))
+
+(defn handle-form-def [state val]
+  (let [job (submit-job! api/upsert-form-def! :form-def (:parent state) val)]
+    (update state :jobs #(add-job % :form job))))
+
+(defn handle-item-group-ref [state val]
+  (update state :refs #(collect-item-group-ref % val)))
+
+(defn handle-item-group-def [state val]
+  (let [job (submit-job! api/upsert-item-group-def! :item-group-def (:parent state) val)]
+    (update state :jobs #(add-job % :item-group job))))
+
 (defn- handle-item-ref [state val]
   (update state :refs #(collect-item-ref % val)))
 
 (defn- handle-item-def [state val]
   (let [job (submit-job! api/upsert-item-def! :item-def (:parent state) val)]
     (update state :jobs #(add-job % :item job))))
+
+(defn- handler [type]
+  (case type
+    :form-ref handle-form-ref
+    :form-def handle-form-def
+    :item-group-ref handle-item-group-ref
+    :item-group-def handle-item-group-def
+    :item-ref handle-item-ref
+    :item-def handle-item-def))
+
+(defn handle-study-job [state port val]
+  (-> (update state :jobs #(remove-job % :study port))
+      (assoc :parent val)))
+
+(defn handle-form-def-job [state port val]
+  (-> (update state :jobs #(remove-job % :form port))
+      (update :defs #(collect-form-def % val))))
+
+(defn handle-item-group-ref-job [state port _]
+  (update state :jobs #(remove-job % :item-group port)))
+
+(defn handle-item-group-def-job [state port val]
+  (let [create-ref (map #(create-item-group-ref-job (get-in state [:defs (:study-id val)]) %))
+        ref-vec [(:study-id val) :item-group-refs (:id (:data val))]
+        ref-jobs (eduction create-ref (get-in state [:refs ref-vec]))]
+    (-> (update state :jobs #(-> (remove-job % :item-group port)
+                                 (add-jobs :item-group ref-jobs)))
+        (update :defs #(collect-item-group-def % val))
+        (update :refs #(dissoc-in % ref-vec)))))
+
+(defn handle-item-ref-job [state port val]
+  (update state :jobs #(remove-job % :item port)))
+
+(defn handle-item-def-job [state port val]
+  (let [create-ref (map #(create-item-ref-job (get-in state [:defs (:study-id val)]) %))
+        ref-vec [(:study-id val) :item-refs (:id (:data val))]
+        ref-jobs (eduction create-ref (get-in state [:refs ref-vec]))]
+    (-> (update state :jobs #(-> (remove-job % :item port)
+                                 (add-jobs :item ref-jobs)))
+        (update :refs #(dissoc-in % ref-vec)))))
+
+(defn- job-handler [type]
+  (case type
+    :study handle-study-job
+    ;:form-ref handle-form-ref-job
+    :form-def handle-form-def-job
+    :item-group-ref handle-item-group-ref-job
+    :item-group-def handle-item-group-def-job
+    :item-ref handle-item-ref-job
+    :item-def handle-item-def-job))
 
 (defn import! [service-document n parse-ch]
   (let [constrain-jobs
@@ -93,84 +162,13 @@
                      :jobs {:count 0}
                      :defs {}
                      :refs {}}]
-      (log/debug "--------------------------------------------------")
-      (log/debug "Parent:" (:data (:parent state)))
-      (log/debug "Jobs:  " (map-vals count (dissoc (:jobs state) :count)))
-      (log/debug "--------------------------------------------------")
       (let [[val port] (async/alts! (into ports (select-jobs (:jobs state))))]
-        (if val
+        (if-let [type (:type val)]
           (if (= parse-ch port)
-            (do (log/debug "Parsed" (:type val) (:id val))
-                (case (:type val)
-                  :study
-                  (let [job (async/pipe (api/upsert-study! (:parent state) val)
-                                        (async/chan 1 (assoc-xf :type :study)))]
-                    (recur [] (update state :jobs #(add-job % :study job))))
-
-                  :form-ref
-                  (recur (constrain-jobs state)
-                         (update state :refs #(collect-form-ref % val)))
-
-                  :form-def
-                  (let [job (submit-job! api/upsert-form-def! :form-def (:parent state) val)]
-                    (recur (constrain-jobs state)
-                           (update state :jobs #(add-job % :form job))))
-
-                  :item-group-ref
-                  (recur (constrain-jobs state)
-                         (update state :refs #(collect-item-group-ref % val)))
-
-                  :item-group-def
-                  (let [job (submit-job! api/upsert-item-group-def! :item-group-def (:parent state) val)]
-                    (recur (constrain-jobs state)
-                           (update state :jobs #(add-job % :item-group job))))
-
-                  :item-ref
-                  (recur (constrain-jobs state) (handle-item-ref state val))
-
-                  :item-def
-                  (recur (constrain-jobs state) (handle-item-def state val))))
-
-            ;; jobs
-            (do
-              (log/debug "Finished" (:type val) (:id (:data val)))
-              (case (:type val)
-                :study
-                (recur (constrain-jobs state)
-                       (-> (update state :jobs #(remove-job % :study port))
-                           (assoc :parent val)))
-
-                :form-def
-                (recur (constrain-jobs state)
-                       (-> (update state :jobs #(remove-job % :form port))
-                           (update :defs #(collect-form-def % val))))
-
-                :item-group-ref
-                (recur (constrain-jobs state)
-                       (update state :jobs #(remove-job % :item-group port)))
-
-                :item-group-def
-                (let [create-ref (map #(create-item-group-ref-job (get-in state [:defs (:study-id val)]) %))
-                      ref-vec [(:study-id val) :item-group-refs (:id (:data val))]
-                      ref-jobs (eduction create-ref (get-in state [:refs ref-vec]))]
-                  (recur (constrain-jobs state)
-                         (-> (update state :jobs #(-> (remove-job % :item-group port)
-                                                      (add-jobs :item-group ref-jobs)))
-                             (update :defs #(collect-item-group-def % val))
-                             (update :refs #(dissoc-in % ref-vec)))))
-
-                :item-ref
-                (recur (constrain-jobs state)
-                       (update state :jobs #(remove-job % :item port)))
-
-                :item-def
-                (let [create-ref (map #(create-item-ref-job (get-in state [:defs (:study-id val)]) %))
-                      ref-vec [(:study-id val) :item-refs (:id (:data val))]
-                      ref-jobs (eduction create-ref (get-in state [:refs ref-vec]))]
-                  (recur (constrain-jobs state)
-                         (-> (update state :jobs #(-> (remove-job % :item port)
-                                                      (add-jobs :item ref-jobs)))
-                             (update :refs #(dissoc-in % ref-vec))))))))
+            (if (= :study type)
+              (recur [] (handle-study state val))
+              (recur (constrain-jobs state) ((handler type) state val)))
+            (recur (constrain-jobs state) ((job-handler type) state port val)))
 
           (if (= 0 (:count (:jobs state)))
             (log/info "Finished!")

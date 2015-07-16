@@ -66,10 +66,7 @@
   (reset)
   (pst)
 
-  (->> #_"samples/9814_who_five_well-being_.ODM.xml"
-       "samples/9840_nci_standard_adverse.ODM.xml"
-       #_"samples/nci2.xml"
-       (io/input-stream)
-       (parse! (:parse-bus system))
-       (time))
+  (let [ch (parse! (io/input-stream "samples/9814_who_five_well-being_.ODM.xml"))]
+    )
+
   )

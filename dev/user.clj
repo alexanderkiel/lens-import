@@ -14,7 +14,10 @@
 
   (time
     (let [service-document (<?? (hap/fetch (URI/create "http://localhost:5003/wh")))
-          ch (parse! (io/input-stream "/home/akiel/coding/odm-export/out.xml"))]
-      (<!! (import! service-document 100 ch))))
+          ch (parse! (io/input-stream "/home/akiel/coding/odm-export/all.xml"))
+          res (<!! (import! service-document 100 ch))]
+      (if (instance? Throwable res)
+        (println res)
+        (println "Finished!"))))
 
   )

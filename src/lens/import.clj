@@ -167,7 +167,6 @@
               (recur (constrain-jobs state) ((job-handler type) state port val)))
 
             (if (= 0 (:count (:jobs state)))
-              (if (empty? (:refs state))
-                (log/info "Finished!")
+              (if-not (empty? (:refs state))
                 (throw (ex-info (str "Unresolved refs: " (:refs state)) {:refs (:refs state)})))
               (recur [] state))))))))

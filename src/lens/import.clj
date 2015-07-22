@@ -6,7 +6,7 @@
             [lens.api :as api]))
 
 (defn- assoc-xf [& kvs]
-  (map #(apply assoc % kvs)))
+  (map #(if (instance? Throwable %) % (apply assoc % kvs))))
 
 (def FormRef
   {:study-id s/Str

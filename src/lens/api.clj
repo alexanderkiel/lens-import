@@ -16,7 +16,7 @@
 (defn update-rep!
   "Returns a channel conveying the updated representation or any errors."
   [rep changes]
-  (let [edited (merge rep {:data changes})]
+  (let [edited (merge rep {:data (dissoc changes :type)})]
     (when (not= rep edited)
       (hap/update (:self (:links rep)) edited))
     (go rep)))
@@ -70,7 +70,7 @@
   {:pre [study (:id form-data)]}
   (upsert! (query study :lens/find-form-def)
            (form study :lens/create-form-def)
-           form-data))
+           (dissoc form-data :study-id)))
 
 ;; ---- Item Group Ref --------------------------------------------------------
 
@@ -86,7 +86,7 @@
   {:pre [study (:id item-group-data)]}
   (upsert! (query study :lens/find-item-group-def)
            (form study :lens/create-item-group-def)
-           item-group-data))
+           (dissoc item-group-data :study-id)))
 
 ;; ---- Item Ref --------------------------------------------------------
 
@@ -102,4 +102,4 @@
   {:pre [study (:id item-data)]}
   (upsert! (query study :lens/find-item-def)
            (form study :lens/create-item-def)
-           item-data))
+           (dissoc item-data :study-id)))

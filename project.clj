@@ -14,9 +14,6 @@
                  [prismatic/plumbing "0.4.4"]
                  [org.clojars.akiel/hap-client-clj "0.1-SNAPSHOT"
                   :exclusions [org.clojure/clojurescript]]
-                 [com.stuartsierra/component "0.2.3"]
-                 [clj-time "0.6.0"]
-                 [clj-stacktrace "0.2.7"]
                  [org.slf4j/slf4j-api "1.7.7"]
                  [ch.qos.logback/logback-classic "1.1.2"]]
 

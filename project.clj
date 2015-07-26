@@ -12,7 +12,7 @@
                  [org.clojure/tools.logging "0.3.1"]
                  [org.clojure/tools.reader "0.9.2"]
                  [prismatic/plumbing "0.4.4"]
-                 [org.clojars.akiel/hap-client-clj "0.1-SNAPSHOT"
+                 [org.clojars.akiel/hap-client-clj "0.1"
                   :exclusions [org.clojure/clojurescript]]
                  [org.slf4j/slf4j-api "1.7.7"]
                  [ch.qos.logback/logback-classic "1.1.2"]]

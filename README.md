@@ -9,8 +9,7 @@ Lens Import is a command line tool for importing [ODM][2] data into
 
 Copyright © 2015 Alexander Kiel
 
-Distributed under the Eclipse Public License either version 1.0 or (at
-your option) any later version.
+Distributed under the Eclipse Public License, the same as Clojure.
 
 [1]: <https://github.com/alexanderkiel/lens>
 [2]: <http://cdisc.org/odm>

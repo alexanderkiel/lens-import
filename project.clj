@@ -2,8 +2,6 @@
   :description "A command line tool for importing ODM data into Lens Warehouse."
   :url "https://github.com/alexanderkiel/lens-import"
 
-  :min-lein-version "2.0.0"
-
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
                  [org.clojure/data.xml "0.0.8"]

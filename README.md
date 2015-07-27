@@ -2,6 +2,8 @@ __Please start at the [Top-Level Lens Repo][1].__
 
 # Lens Import
 
+[![Build Status](https://travis-ci.org/alexanderkiel/lens-import.svg?branch=master)](https://travis-ci.org/alexanderkiel/lens-import)
+
 Lens Import is a command line tool for importing [ODM][2] data into
 [Lens Warehouse][3].
 

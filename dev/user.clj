@@ -6,13 +6,12 @@
             [clojure.pprint :refer [pprint]]
             [hap-client.core :as hap]
             [lens.parse :refer [parse!]]
-            [lens.import :refer [import!]])
-  (:import [java.net URI]))
+            [lens.import :refer [import!]]))
 
 (comment
 
   (time
-    (let [service-document (<?? (hap/fetch (URI/create "http://localhost:5001")))
+    (let [service-document (<?? (hap/fetch "http://localhost:5001"))
           ch (parse! (io/input-stream "out.xml"))
           res (<!! (import! service-document 100 ch))]
       (if (instance? Throwable res)

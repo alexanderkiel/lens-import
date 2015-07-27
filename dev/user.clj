@@ -4,7 +4,6 @@
             [async-error.core :refer [<??]]
             [clojure.java.io :as io]
             [clojure.pprint :refer [pprint]]
-            [clojure.tools.namespace.repl :refer [refresh]]
             [hap-client.core :as hap]
             [lens.parse :refer [parse!]]
             [lens.import :refer [import!]])

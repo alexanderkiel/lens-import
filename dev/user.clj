@@ -1,13 +1,13 @@
 (ns user
   (:use plumbing.core)
   (:require [clojure.core.async :refer [<!!]]
+            [async-error.core :refer [<??]]
             [clojure.java.io :as io]
             [clojure.pprint :refer [pprint]]
             [clojure.tools.namespace.repl :refer [refresh]]
             [hap-client.core :as hap]
             [lens.parse :refer [parse!]]
-            [lens.import :refer [import!]]
-            [lens.util :refer [<??]])
+            [lens.import :refer [import!]])
   (:import [java.net URI]))
 
 (comment

@@ -3,7 +3,7 @@
   (:require [clojure.core.async :refer [go <!]]
             [clojure.tools.logging :as log]
             [hap-client.core :as hap]
-            [lens.util :refer [<? try-go]]))
+            [async-error.core :refer [<? go-try]]))
 
 (defn- query [doc id]
   (or (-> doc :queries id)
@@ -23,7 +23,7 @@
 
 (defn upsert! [find-query create-form {:keys [id] :as data}]
   {:pre [find-query id]}
-  (try-go
+  (go-try
     (let [result (<! (hap/execute find-query {:id id}))]
       (if (instance? Throwable result)
         (if (= 404 (:status (ex-data result)))
@@ -32,7 +32,7 @@
         (<? (update-rep! result data))))))
 
 (defn create-ref! [find-query create-form data]
-  (try-go
+  (go-try
     (let [result (<! (hap/execute find-query data))]
       (if (instance? Throwable result)
         (if (= 404 (:status (ex-data result)))

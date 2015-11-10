@@ -2,6 +2,7 @@
 /.lein-*
 /.nrepl-port
 /*.iml
+/*.xml
 /.idea/
 /samples/
 /ODM-*/

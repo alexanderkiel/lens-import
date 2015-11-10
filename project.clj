@@ -5,16 +5,19 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
   :dependencies [[org.clojure/clojure "1.7.0"]
-                 [org.clojure/core.async "0.1.346.0-17112a-alpha"]
+                 [org.clojure/core.async "0.2.371"]
                  [org.clojure/data.xml "0.0.8"]
                  [org.clojure/data.zip "0.1.1"]
                  [org.clojure/tools.cli "0.3.1"]
                  [org.clojure/tools.logging "0.3.1"]
                  [org.clojure/tools.reader "0.9.2"]
                  [prismatic/plumbing "0.4.4"]
-                 [org.clojars.akiel/hap-client-clj "0.1"
+                 [org.clojars.akiel/hap-client-clj "0.3-SNAPSHOT"
+                  :exclusions [org.clojure/clojurescript
+                               com.cognitect/transit-cljs
+                               com.cognitect/transit-js]]
+                 [org.clojars.akiel/async-error "0.1"
                   :exclusions [org.clojure/clojurescript]]
-                 [org.clojars.akiel/async-error "0.1"]
                  [org.slf4j/slf4j-api "1.7.7"]
                  [ch.qos.logback/logback-classic "1.1.2"]]
 

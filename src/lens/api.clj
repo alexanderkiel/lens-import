@@ -24,7 +24,7 @@
 (defn upsert! [find-query create-form {:keys [id] :as data}]
   {:pre [find-query id]}
   (go-try
-    (let [result (<! (hap/execute find-query {:id id}))]
+    (let [result (<! (hap/query find-query {:id id}))]
       (if (instance? Throwable result)
         (if (= 404 (:status (ex-data result)))
           (<? (hap/fetch (<? (hap/create create-form data))))
@@ -33,7 +33,7 @@
 
 (defn create-ref! [find-query create-form data]
   (go-try
-    (let [result (<! (hap/execute find-query data))]
+    (let [result (<! (hap/query find-query data))]
       (if (instance? Throwable result)
         (if (= 404 (:status (ex-data result)))
           (<? (hap/fetch (<? (hap/create create-form data))))

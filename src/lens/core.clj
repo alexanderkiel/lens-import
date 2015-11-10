@@ -1,6 +1,13 @@
 (ns lens.core
+  (:use plumbing.core)
   (:require [clojure.tools.cli :as cli]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [clojure.core.async :refer [<!!]]
+            [async-error.core :refer [<??]]
+            [clojure.java.io :as io]
+            [hap-client.core :as hap]
+            [lens.parse :refer [parse!]]
+            [lens.import :refer [import!]]))
 
 (def cli-options
   [["-w" "--warehouse-uri URI" "The Lens Warehouse URI to use"
@@ -24,8 +31,7 @@
   (System/exit status))
 
 (defn -main [& args]
-  (let [{:keys [options errors summary]} (cli/parse-opts args cli-options)
-        version (System/getProperty "lens-import.version")]
+  (letk [[options arguments errors summary] (cli/parse-opts args cli-options)]
     (cond
       (:help options)
       (exit 0 (usage summary))
@@ -36,10 +42,16 @@
       (nil? (:warehouse-uri options))
       (exit 1 "Missing Lens Warehouse URI."))
 
-    (let [{:keys [warehouse-uri]} options]
-      (println "Version:" version)
+    (letk [[warehouse-uri] options
+           filename (first arguments)]
+      (println "Version:" (System/getProperty "lens-import.version"))
       (println "Max Memory:" (quot (.maxMemory (Runtime/getRuntime))
                                    (* 1024 1024)) "MB")
       (println "Num CPUs:" (.availableProcessors (Runtime/getRuntime)))
-      (println "Datomic:" warehouse-uri)
-      )))
+      (println "Warehouse:" warehouse-uri)
+      (let [service-document (<?? (hap/fetch warehouse-uri))
+            ch (parse! (io/input-stream filename))
+            res (<!! (import! service-document 100 ch))]
+        (if (instance? Throwable res)
+          (println res)
+          (println "Finished!"))))))

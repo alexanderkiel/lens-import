@@ -8,7 +8,7 @@
                  [org.clojure/core.async "0.2.371"]
                  [org.clojure/data.xml "0.0.8"]
                  [org.clojure/data.zip "0.1.1"]
-                 [org.clojure/tools.cli "0.3.1"]
+                 [org.clojure/tools.cli "0.3.3"]
                  [org.clojure/tools.logging "0.3.1"]
                  [org.clojure/tools.reader "0.9.2"]
                  [prismatic/plumbing "0.4.4"]

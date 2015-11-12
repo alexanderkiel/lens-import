@@ -26,9 +26,9 @@
   "Returns a channel conveying the updated representation or any errors."
   [rep changes]
   (let [edited (merge rep {:data (dissoc changes :type)})]
-    (when (not= rep edited)
-      (hap/update (:self (:links rep)) edited))
-    (go rep)))
+    (if (not= rep edited)
+      (hap/update (:self (:links rep)) edited)
+      (go rep))))
 
 (defn upsert! [find-query create-form {:keys [id] :as data}]
   {:pre [find-query id]}

@@ -25,7 +25,7 @@
   (fn [loc] (xml1-> loc :TranslatedText text-with-line-breaks)))
 
 (defn- desc [loc]
-  (str/trim (xml1-> loc :Description (first-translated-text))))
+  (some-> (xml1-> loc :Description (first-translated-text)) str/trim))
 
 (defn- question [loc]
   (xml1-> loc :Question (first-translated-text)))
@@ -33,6 +33,9 @@
 (defn- keywords [loc]
   (let [kws (set (map str/trim (xml-> loc :Keyword text)))]
     (when (seq kws) kws)))
+
+(defn- recording-type [loc]
+  (some-> (xml1-> loc :Recording-Type text) str/trim))
 
 ;; ---- Form Ref --------------------------------------------------------------
 
@@ -76,7 +79,8 @@
        :id (oid form-def)
        :name (xml1-> form-def (attr :Name))}
       (assoc-when :desc (desc form-def))
-      (assoc-when :keywords (keywords form-def))))
+      (assoc-when :keywords (keywords form-def))
+      (assoc-when :recording-type (recording-type form-def))))
 
 (defn parse-form-def! [ch form-def]
   (>!! ch (parse-form-def-head form-def))

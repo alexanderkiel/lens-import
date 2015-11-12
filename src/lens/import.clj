@@ -88,6 +88,7 @@
   (update state :refs #(collect-form-ref % val)))
 
 (defn handle-form-def [state val]
+  (log/debug "handle-form-def" val)
   (let [job (submit-job! api/upsert-form-def! :form-def (:parent state) val)]
     (update state :jobs #(add-job % :form job))))
 

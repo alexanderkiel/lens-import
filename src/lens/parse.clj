@@ -30,6 +30,10 @@
 (defn- question [loc]
   (xml1-> loc :Question (first-translated-text)))
 
+(defn- keywords [loc]
+  (let [kws (set (map str/trim (xml-> loc :Keyword text)))]
+    (when (seq kws) kws)))
+
 ;; ---- Form Ref --------------------------------------------------------------
 
 (defn parse-form-ref [form-ref]
@@ -71,7 +75,8 @@
   (-> {:type :form-def
        :id (oid form-def)
        :name (xml1-> form-def (attr :Name))}
-      (assoc-when :desc (desc form-def))))
+      (assoc-when :desc (desc form-def))
+      (assoc-when :keywords (keywords form-def))))
 
 (defn parse-form-def! [ch form-def]
   (>!! ch (parse-form-def-head form-def))

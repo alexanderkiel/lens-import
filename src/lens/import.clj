@@ -3,7 +3,21 @@
   (:require [clojure.core.async :as async :refer [go-loop]]
             [clojure.tools.logging :as log]
             [schema.core :as s]
-            [lens.api :as api]))
+            [lens.api :as api]
+            [hap-client.core :as hap]))
+
+;; ---- Schema ----------------------------------------------------------------
+
+(defn mk-state [parent]
+  {:parent parent
+   :jobs s/Any
+   :defs s/Any
+   :refs s/Any})
+
+(def State
+  (mk-state hap/Representation))
+
+;; ---- ??? -------------------------------------------------------------------
 
 (defn- assoc-xf [& kvs]
   (map #(if (instance? Throwable %) % (apply assoc % kvs))))
@@ -65,7 +79,7 @@
     (->> (async/chan 1 (assoc-xf :type :item-ref))
          (async/pipe (api/create-item-ref! item-group-def ref)))))
 
-(defn handle-study [state val]
+(s/defn handle-study [state :- (mk-state api/SD) val]
   (let [job (->> (async/chan 1 (assoc-xf :type :study))
                  (async/pipe (api/upsert-study! (:parent state) val)))]
     (update state :jobs #(add-job % :study job))))
@@ -142,12 +156,12 @@
     :item-ref handle-item-ref-job
     :item-def handle-item-def-job))
 
-(defn import!
+(s/defn import!
   "Returns a channel which closes after the import finished.
 
   Puts an ExceptionInfo onto the channel if there is any problem. Fails fast on
   the first problem."
-  [service-document n parse-ch]
+  [service-document :- api/SD n parse-ch]
   (let [constrain-jobs
         (fn [state]
           (if (< (:count (:jobs state)) n) [parse-ch] []))]
@@ -159,10 +173,10 @@
       (let [[val port] (async/alts! (into ports (select-jobs (:jobs state))))]
         (if (instance? Throwable val)
           val
-          (if-let [type (:type val)]
+          (if-letk [[type] val]
             (if (= parse-ch port)
               (if (= :study type)
-                (recur [] (handle-study state val))
+                (recur [] (handle-study (assoc state :parent service-document) val))
                 (recur (constrain-jobs state) ((handler type) state val)))
               (recur (constrain-jobs state) ((job-handler type) state port val)))
 

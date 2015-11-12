@@ -6,7 +6,10 @@
             [clojure.pprint :refer [pprint]]
             [hap-client.core :as hap]
             [lens.parse :refer [parse!]]
-            [lens.import :refer [import!]]))
+            [lens.import :refer [import!]]
+            [schema.core :as s]))
+
+(s/set-fn-validation! true)
 
 (comment
 

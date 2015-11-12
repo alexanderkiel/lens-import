@@ -3,7 +3,16 @@
   (:require [clojure.core.async :refer [go <!]]
             [clojure.tools.logging :as log]
             [hap-client.core :as hap]
-            [async-error.core :refer [<? go-try]]))
+            [async-error.core :refer [<? go-try]]
+            [schema.core :as s]))
+
+;; ---- Schema ----------------------------------------------------------------
+
+(def SD
+  {:data {:name s/Str :version s/Str s/Any s/Any}
+   s/Any s/Any})
+
+;; ---- Helper ----------------------------------------------------------------
 
 (defn- query [doc id]
   (or (-> doc :queries id)
@@ -42,8 +51,7 @@
 
 ;; ---- Study -----------------------------------------------------------------
 
-(defn upsert-study! [service-document study-data]
-  {:pre [service-document]}
+(s/defn upsert-study! [service-document :- SD study-data]
   (upsert! (query service-document :lens/find-study)
            (form service-document :lens/create-study)
            study-data))

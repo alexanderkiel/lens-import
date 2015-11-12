@@ -2,20 +2,30 @@
   (:use plumbing.core)
   (:require [clojure.core.async :as async :refer [>!!]]
             [clojure.data.xml :as xml]
+            [clojure.data.zip :as zf]
             [clojure.data.zip.xml :refer [xml-> xml1-> attr attr= text]]
             [clojure.tools.logging :as log]
-            [clojure.zip :as zip]))
+            [clojure.zip :as zip]
+            [clojure.string :as str]))
 
 ;; ---- Private ---------------------------------------------------------------
 
 (defn- oid [loc]
   (xml1-> loc (attr :OID)))
 
+(defn text-with-line-breaks
+  "Returns the textual contents of the given location, similar to
+  xpaths's value-of but preserves line breaks."
+  [loc]
+  (-> (apply str (xml-> loc zf/descendants zip/node string?))
+      (str/replace #"\p{Blank}+" " ")
+      (str/replace #"\n+\s+" "\n")))
+
 (defn- first-translated-text []
-  (fn [loc] (xml1-> loc :TranslatedText text)))
+  (fn [loc] (xml1-> loc :TranslatedText text-with-line-breaks)))
 
 (defn- desc [loc]
-  (xml1-> loc :Description (first-translated-text)))
+  (str/trim (xml1-> loc :Description (first-translated-text))))
 
 (defn- question [loc]
   (xml1-> loc :Question (first-translated-text)))

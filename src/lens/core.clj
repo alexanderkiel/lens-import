@@ -42,14 +42,14 @@
       (nil? (:warehouse-uri options))
       (exit 1 "Missing Lens Warehouse URI."))
 
-    (letk [[warehouse-uri] options
-           filename (first arguments)]
+    (letk [[warehouse-uri] options]
       (println "Version:" (System/getProperty "lens-import.version"))
       (println "Max Memory:" (quot (.maxMemory (Runtime/getRuntime))
                                    (* 1024 1024)) "MB")
       (println "Num CPUs:" (.availableProcessors (Runtime/getRuntime)))
       (println "Warehouse:" warehouse-uri)
-      (let [service-document (<?? (hap/fetch warehouse-uri))
+      (let [filename (first arguments)
+            service-document (<?? (hap/fetch warehouse-uri))
             ch (parse! (io/input-stream filename))
             res (<!! (import! service-document 100 ch))]
         (if (instance? Throwable res)

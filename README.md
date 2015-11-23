@@ -7,6 +7,12 @@ __Please start at the [Top-Level Lens Repo][1].__
 Lens Import is a command line tool for importing [ODM][2] data into
 [Lens Warehouse][3].
 
+## Usage
+
+```sh
+./import.sh -h
+```
+
 ## License
 
 Copyright © 2015 Alexander Kiel

@@ -27,11 +27,18 @@
   [rep changes]
   (let [edited (merge rep {:data (dissoc changes :type)})]
     (if (not= rep edited)
-      (hap/update (:self (:links rep)) edited)
+      (do (log/debug "Update changed" (:self (:links rep)))
+          (hap/update (:self (:links rep)) edited))
       (go rep))))
 
-(defn upsert! [find-query create-form {:keys [id] :as data}]
-  {:pre [find-query id]}
+(s/defn upsert!
+  "Upserts (creates or updates) data with an id using the find query to decide
+  whether it exists already.
+
+  Returns a channel conveying the created or updated representation or any
+  errors."
+  [find-query :- hap/Query create-form :- hap/Form {:keys [id] :as data}]
+  (assert id)
   (go-try
     (let [result (<! (hap/query find-query {:id id}))]
       (if (instance? Throwable result)

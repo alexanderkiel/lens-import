@@ -61,7 +61,7 @@
   (doseq [form-ref (xml-> study-event-def :FormRef)]
     (parse-form-ref! ch form-ref)))
 
-;; ---- Item Group Ref --------------------------------------------------------------
+;; ---- Item Group Ref --------------------------------------------------------
 
 (defn parse-item-group-ref [item-group-ref]
   (-> {:type :item-group-ref
@@ -146,7 +146,7 @@
   {:type :study
    :id (oid study)
    :name (xml1-> study :GlobalVariables :StudyName text)
-   :desc (xml1-> study :GlobalVariables :StudyDescription text)})
+   :desc (xml1-> study :GlobalVariables :StudyDescription text-with-line-breaks)})
 
 (defn parse-study! [ch study]
   (log/debug "Start parsing study" (oid study))

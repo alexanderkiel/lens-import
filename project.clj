@@ -4,15 +4,15 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
-  :dependencies [[org.clojure/clojure "1.7.0"]
-                 [org.clojure/core.async "0.2.371"]
+  :dependencies [[org.clojure/clojure "1.8.0"]
+                 [org.clojure/core.async "0.2.374"]
                  [org.clojure/data.xml "0.0.8"]
                  [org.clojure/data.zip "0.1.1"]
                  [org.clojure/tools.cli "0.3.3"]
                  [org.clojure/tools.logging "0.3.1"]
-                 [org.clojure/tools.reader "0.9.2"]
-                 [prismatic/plumbing "0.4.4"]
-                 [org.clojars.akiel/hap-client-clj "0.3-SNAPSHOT"
+                 [prismatic/plumbing "0.5.2"]
+                 [prismatic/schema "1.0.4"]
+                 [org.clojars.akiel/hap-client-clj "0.4"
                   :exclusions [org.clojure/clojurescript
                                com.cognitect/transit-cljs
                                com.cognitect/transit-js]]

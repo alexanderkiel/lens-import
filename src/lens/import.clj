@@ -3,19 +3,15 @@
   (:require [clojure.core.async :as async :refer [go-loop]]
             [clojure.tools.logging :as log]
             [schema.core :as s]
-            [lens.api :as api]
-            [hap-client.core :as hap]))
+            [lens.api :as api]))
 
 ;; ---- Schema ----------------------------------------------------------------
 
-(defn mk-state [parent]
+(defn state-schema [parent]
   {:parent parent
    :jobs s/Any
    :defs s/Any
-   :refs s/Any})
-
-(def State
-  (mk-state hap/Representation))
+   (s/optional-key :refs) s/Any})
 
 ;; ---- ??? -------------------------------------------------------------------
 
@@ -79,7 +75,7 @@
     (->> (async/chan 1 (assoc-xf :type :item-ref))
          (async/pipe (api/create-item-ref! item-group-def ref)))))
 
-(s/defn handle-study [state :- (mk-state api/SD) val]
+(s/defn handle-study [state :- (state-schema api/SDoc) val]
   (let [job (->> (async/chan 1 (assoc-xf :type :study))
                  (async/pipe (api/upsert-study! (:parent state) val)))]
     (update state :jobs #(add-job % :study job))))
@@ -87,23 +83,23 @@
 (defn handle-form-ref [state val]
   (update state :refs #(collect-form-ref % val)))
 
-(defn handle-form-def [state val]
+(defn handle-form-def [{:keys [parent] :as state} val]
   (log/debug "handle-form-def" val)
-  (let [job (submit-job! api/upsert-form-def! :form-def (:parent state) val)]
+  (let [job (submit-job! api/upsert-form-def! :form-def parent val)]
     (update state :jobs #(add-job % :form job))))
 
 (defn handle-item-group-ref [state val]
   (update state :refs #(collect-item-group-ref % val)))
 
-(defn handle-item-group-def [state val]
-  (let [job (submit-job! api/upsert-item-group-def! :item-group-def (:parent state) val)]
+(defn handle-item-group-def [{:keys [parent] :as state} val]
+  (let [job (submit-job! api/upsert-item-group-def! :item-group-def parent val)]
     (update state :jobs #(add-job % :item-group job))))
 
 (defn- handle-item-ref [state val]
   (update state :refs #(collect-item-ref % val)))
 
-(defn- handle-item-def [state val]
-  (let [job (submit-job! api/upsert-item-def! :item-def (:parent state) val)]
+(defn- handle-item-def [{:keys [parent] :as state} val]
+  (let [job (submit-job! api/upsert-item-def! :item-def parent val)]
     (update state :jobs #(add-job % :item job))))
 
 (defn- handler [type]
@@ -162,7 +158,7 @@
 
   Puts an ExceptionInfo onto the channel if there is any problem. Fails fast on
   the first problem."
-  [service-document :- api/SD n parse-ch]
+  [service-document :- api/SDoc n parse-ch]
   (let [constrain-jobs
         (fn [state]
           (if (< (:count (:jobs state)) n) [parse-ch] []))]
@@ -184,7 +180,7 @@
               (->> ((job-handler type) state port val)
                    (recur (constrain-jobs state))))
 
-            (if (= 0 (:count (:jobs state)))
+            (if (zero? (:count (:jobs state)))
               (if-not (empty? (:refs state))
                 (throw (ex-info (str "Unresolved refs: " (:refs state))
                                 {:refs (:refs state)})))

@@ -4,13 +4,18 @@
             [clojure.tools.logging :as log]
             [hap-client.core :as hap]
             [async-error.core :refer [<? go-try]]
-            [schema.core :as s]))
+            [schema.core :as s :refer [Str Any]]
+            [lens.parse :refer [StudyData FormData]]))
 
 ;; ---- Schema ----------------------------------------------------------------
 
-(def SD
-  {:data {:name s/Str :version s/Str s/Any s/Any}
-   s/Any s/Any})
+(def SDoc
+  {:data {:name Str :version Str Any Any}
+   Any Any})
+
+(def Study
+  {:data {:id Str :name Str Any Any}
+   Any Any})
 
 ;; ---- Helper ----------------------------------------------------------------
 
@@ -58,7 +63,7 @@
 
 ;; ---- Study -----------------------------------------------------------------
 
-(s/defn upsert-study! [service-document :- SD study-data]
+(s/defn upsert-study! [service-document :- SDoc study-data :- StudyData]
   (upsert! (query service-document :lens/find-study)
            (form service-document :lens/create-study)
            study-data))
@@ -81,8 +86,7 @@
 
 ;; ---- Form Def --------------------------------------------------------------
 
-(defn upsert-form-def! [study form-data]
-  {:pre [study (:id form-data)]}
+(s/defn upsert-form-def! [study :- Study form-data :- FormData]
   (upsert! (query study :lens/find-form-def)
            (form study :lens/create-form-def)
            (dissoc form-data :study-id)))

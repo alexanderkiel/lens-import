@@ -6,7 +6,24 @@
             [clojure.data.zip.xml :refer [xml-> xml1-> attr attr= text]]
             [clojure.tools.logging :as log]
             [clojure.zip :as zip]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [schema.core :as s :refer [Str Any]]))
+
+;; ---- Schema ----------------------------------------------------------------
+
+(def StudyData
+  {:type (s/eq :study)
+   :id Str
+   :name Str
+   Any Any})
+
+(def FormData
+  {:type (s/eq :form-def)
+   :id Str
+   :name Str
+   (s/optional-key :desc) Str
+   (s/optional-key :keywords) [Str]
+   (s/optional-key :inquiry-type-id) Str})
 
 ;; ---- Private ---------------------------------------------------------------
 
@@ -31,11 +48,8 @@
   (xml1-> loc :Question (first-translated-text)))
 
 (defn- keywords [loc]
-  (let [kws (set (map str/trim (xml-> loc :Keyword text)))]
+  (let [kws (mapv str/trim (xml-> loc :Keyword text))]
     (when (seq kws) kws)))
-
-(defn- recording-type [loc]
-  (some-> (xml1-> loc :Recording-Type text) str/trim))
 
 ;; ---- Form Ref --------------------------------------------------------------
 
@@ -74,16 +88,18 @@
 
 ;; ---- Form Def --------------------------------------------------------------
 
-(defn parse-form-def-head [form-def]
+(s/defn parse-form-def-head :- FormData 
+  [form-def]
   (-> {:type :form-def
        :id (oid form-def)
        :name (xml1-> form-def (attr :Name))}
       (assoc-when :desc (desc form-def))
       (assoc-when :keywords (keywords form-def))
-      (assoc-when :recording-type (recording-type form-def))))
+      (assoc-when :inquiry-type-id (xml1-> form-def (attr :InquiryTypeOID)))))
 
 (defn parse-form-def! [ch form-def]
-  (>!! ch (parse-form-def-head form-def))
+  (let [form-data (parse-form-def-head form-def)]
+    (>!! ch form-data))
   (doseq [item-group-ref (xml-> form-def :ItemGroupRef)]
     (parse-item-group-ref! ch item-group-ref)))
 
@@ -142,7 +158,8 @@
 
 ;; ---- Study -----------------------------------------------------------------
 
-(defn parse-study-head [study]
+(s/defn parse-study-head :- StudyData 
+  [study]
   {:type :study
    :id (oid study)
    :name (xml1-> study :GlobalVariables :StudyName text)

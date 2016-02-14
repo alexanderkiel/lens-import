@@ -2,8 +2,9 @@
   (:use plumbing.core)
   (:require [clojure.core.async :as async :refer [go-loop]]
             [clojure.tools.logging :as log]
-            [schema.core :as s]
-            [lens.api :as api]))
+            [schema.core :as s :refer [Str]]
+            [lens.api :as api :refer [Study]]
+            [lens.parse :refer [StudyData FormData]]))
 
 ;; ---- Schema ----------------------------------------------------------------
 
@@ -19,8 +20,8 @@
   (map #(if (instance? Throwable %) % (apply assoc % kvs))))
 
 (def FormRef
-  {:study-id s/Str
-   :form-id s/Str})
+  {:study-id Str
+   :form-id Str})
 
 (s/defn collect-form-ref
   "Collects the ref in refs under [(:study-id ref) :form-refs (:form-id ref)]."
@@ -39,7 +40,7 @@
 (defn- collect-item-group-def [defs val]
   (assoc-in defs [(:study-id val) :item-group-defs (:id (:data val))] val))
 
-(defn- submit-job! [upsert-fn type study val]
+(s/defn ^:private submit-job! [upsert-fn type study :- Study val]
   (->> (async/chan 1 (assoc-xf :type type :study-id (:id (:data study))))
        (async/pipe (upsert-fn study val))))
 
@@ -83,7 +84,7 @@
 (defn handle-form-ref [state val]
   (update state :refs #(collect-form-ref % val)))
 
-(defn handle-form-def [{:keys [parent] :as state} val]
+(s/defn handle-form-def [{:keys [parent] :as state} val :- FormData]
   (log/debug "handle-form-def" val)
   (let [job (submit-job! api/upsert-form-def! :form-def parent val)]
     (update state :jobs #(add-job % :form job))))

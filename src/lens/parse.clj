@@ -23,7 +23,8 @@
    :name Str
    (s/optional-key :desc) Str
    (s/optional-key :keywords) [Str]
-   (s/optional-key :inquiry-type-id) Str})
+   (s/optional-key :inquiry-type-id) Str
+   Any Any})
 
 ;; ---- Private ---------------------------------------------------------------
 
